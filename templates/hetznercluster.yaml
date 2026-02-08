@@ -1,0 +1,39 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HetznerCluster
+metadata:
+  name: {{ include "cluster.name" . }}
+  annotations:
+    cluster.x-k8s.io/managed-by: k0smotron
+  finalizers:
+    - k0rdent.mirantis.com/cleanup
+spec:
+  controlPlaneRegions:
+    - {{ .Values.region }}
+  {{- if .Values.sshKeyNames }}
+  sshKeys:
+    hcloud:
+    {{- range .Values.sshKeyNames }}
+      - name: {{ . }}
+    {{- end }}
+  {{- end }}
+  hcloudTokenRef:
+    name: {{ .Values.tokenRef.name }}
+    key: {{ .Values.tokenRef.key }}
+  {{- if .Values.placementGroupName }}
+  placementGroups:
+    - name: {{ .Values.placementGroupName }}
+      type: spread
+  {{- end }}
+  {{- if .Values.labels }}
+  labels:
+    {{- toYaml .Values.labels | nindent 4 }}
+  {{- end }}
+  # No control plane load balancer needed for hosted control plane
+  # Control plane runs in management cluster and is exposed via k0smotron Service
+  controlPlaneEndpoint:
+    host: ""
+    port: 6443
+  hetznerSecretRef:
+    name: {{ .Values.tokenRef.name }}
+    key:
+      hcloudToken: {{ .Values.tokenRef.key }}

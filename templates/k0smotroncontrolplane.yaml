@@ -1,0 +1,140 @@
+{{- $global := .Values.global | default dict }}
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: K0smotronControlPlane
+metadata:
+  name: {{ include "k0smotroncontrolplane.name" . }}
+spec:
+  replicas: {{ .Values.k0smotron.controlPlaneNumber }}
+  # dirty hack: k0smotron uses - instead of + in version
+  version: {{ .Values.k0s.version | replace "+" "-" }}
+  {{- with .Values.k0smotron.service }}
+  service:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if $global.registry }}
+  image: {{ $global.registry }}/k0sproject/k0s
+  etcd:
+    image: "{{ $global.registry }}/k0sproject/etcd:v3.5.13"
+  {{- end }}
+  {{- if or $global.registryCertSecret .Values.auth.configSecret.name .Values.dataSource.caSecret.name }}
+  mounts:
+    {{- if $global.registryCertSecret }}
+    - path: /usr/local/share/ca-certificates/registry
+      secret:
+        defaultMode: 420
+        items:
+          - key: ca.crt
+            path: ca.crt
+        secretName: {{ $global.registryCertSecret }}
+    {{- end }}
+    {{- if .Values.auth.configSecret.name }}
+    - path: {{ include "authentication-config.dir" . }}
+      secret:
+        defaultMode: 420
+        items:
+          - key: {{ .Values.auth.configSecret.key }}
+            path: {{ include "authentication-config.file" . }}
+        secretName: {{ .Values.auth.configSecret.name }}
+    {{- end }}
+    {{- if .Values.dataSource.caSecret.name }}
+    - path: /var/lib/k0s/kine-ca
+      secret:
+        defaultMode: 420
+        items:
+          - key: {{ .Values.dataSource.caSecret.key }}
+            path: ca.crt
+        secretName: {{ .Values.dataSource.caSecret.name }}
+    {{- end }}
+  {{- end }}
+  {{- if .Values.dataSource.kineDataSourceSecretName }}
+  kineDataSourceSecretName: {{ .Values.dataSource.kineDataSourceSecretName }}
+  {{- end }}
+  controllerPlaneFlags:
+    - --enable-cloud-provider=true
+    - --debug=true
+    {{- range $arg := .Values.k0smotron.controllerPlaneFlags }}
+    - {{ toYaml $arg }}
+    {{- end }}
+  k0sConfig:
+    apiVersion: k0s.k0sproject.io/v1beta1
+    kind: ClusterConfig
+    metadata:
+      name: k0s
+    spec:
+      api:
+        extraArgs:
+          {{- if .Values.auth.configSecret.name }}
+          authentication-config: {{ include "authentication-config.fullpath" . }}
+          {{- end }}
+          {{- with .Values.k0s.api.extraArgs }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+      {{- with .Values.k0s.network }}
+      network: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $global.registry }}
+      images:
+        repository: "{{ $global.registry }}"
+      {{- end }}
+      extensions:
+        helm:
+          repositories:
+          {{- if not $global.registry }}
+            - name: hcloud
+              url: https://charts.hetzner.cloud
+          {{- else }}
+            - name: global-registry
+              url: oci://{{ regexReplaceAll "/.*" $global.registry "" }}
+              {{- if $global.registryCertSecret }}
+              caFile: /usr/local/share/ca-certificates/registry/ca.crt
+              {{- end }}
+          {{- end }}
+          charts:
+          - name: hcloud-cloud-controller-manager
+            namespace: kube-system
+            {{- if $global.registry }}
+            chartname: oci://{{ $global.registry }}/charts/hcloud-cloud-controller-manager
+            {{- else }}
+            chartname: hcloud/hcloud-cloud-controller-manager
+            {{- end }}
+            version: "1.21.0"
+            values: |
+              {{- if $global.registry }}
+              image:
+                repository: {{ $global.registry }}/hetznercloud/hcloud-cloud-controller-manager
+              {{- end }}
+              secret:
+                create: false
+                name: {{ .Values.tokenRef.name }}
+                tokenKeyName: {{ .Values.tokenRef.key }}
+              networking:
+                enabled: true
+                clusterCIDR: {{ first .Values.clusterNetwork.pods.cidrBlocks }}
+          - name: hcloud-csi
+            namespace: kube-system
+            {{- if $global.registry }}
+            chartname: oci://{{ $global.registry }}/charts/hcloud-csi
+            {{- else }}
+            chartname: hcloud/hcloud-csi
+            {{- end }}
+            version: "2.10.0"
+            values: |
+              {{- if $global.registry }}
+              controller:
+                image:
+                  repository: {{ $global.registry }}/hetznercloud/hcloud-csi-driver
+              node:
+                image:
+                  repository: {{ $global.registry }}/hetznercloud/hcloud-csi-driver
+              {{- end }}
+              storageClasses:
+              - name: hcloud-volumes
+                defaultStorageClass: true
+                reclaimPolicy: Delete
+              controller:
+                hcloudToken:
+                  existingSecret:
+                    name: {{ .Values.tokenRef.name }}
+                    key: {{ .Values.tokenRef.key }}
+              node:
+                kubeletDir: /var/lib/k0s/kubelet
