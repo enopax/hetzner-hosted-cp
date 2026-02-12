@@ -1,0 +1,75 @@
+# Test values for worker template verification
+workersNumber: 3
+
+controlPlane:
+  replicas: 1
+  ingress:
+    enabled: false
+
+clusterNetwork:
+  pods:
+    cidrBlocks:
+      - "10.244.0.0/16"
+  services:
+    cidrBlocks:
+      - "10.96.0.0/12"
+
+clusterLabels:
+  environment: test
+clusterAnnotations:
+  description: "Test cluster"
+
+region: "fsn1"
+sshKeyNames:
+  - "test-key"
+tokenRef:
+  name: "hcloud-token-secret"
+  key: "hcloud-token"
+placementGroupName: "test-pg"
+labels:
+  team: "platform"
+
+hcloudNetwork:
+  enabled: true
+  cidrBlock: "10.0.0.0/16"
+  subnetCidrBlock: "10.0.0.0/24"
+  networkZone: "eu-central"
+
+worker:
+  image: ubuntu-24.04
+  type: cpx22
+  placementGroupName: "worker-pg"
+  dataDisks:
+    - name: data
+      size: 100
+  additionalSecurityGroups:
+    - name: sg-1
+
+k0s:
+  version: v1.34.2+k0s.0
+  arch: amd64
+  api:
+    extraArgs:
+      enable-admission-plugins: "NodeRestriction"
+  network: {}
+
+workerConfig:
+  args:
+    - --enable-cloud-provider
+    - --kubelet-extra-args="--cloud-provider=external"
+  preInstallCommands:
+    - "echo 'Pre-install'"
+  postStartCommands:
+    - "echo 'Post-start'"
+  files:
+    - path: /etc/test.conf
+      content: "test"
+
+cloudControllerManager:
+  enabled: true
+  version: "1.28.0"
+  args:
+    cluster-cidr: "10.244.0.0/16"
+    allocate-node-cidrs: "true"
+    allow-untagged-cloud: ""
+    cloud-provider: "hcloud"

@@ -1,4 +1,11 @@
-{{- $global := .Values.global | default dict }}
+{{/*
+K0sWorkerConfigTemplate resource - Worker node k0s configuration
+This resource defines the k0s configuration for worker nodes including:
+- k0s version and command-line arguments (cloud provider integration)
+- Optional pre-install and post-start commands
+- Optional file provisioning
+Note: HAProxy sidecar functionality is handled natively by k0smotron
+*/}}
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: K0sWorkerConfigTemplate
 metadata:
@@ -6,29 +13,20 @@ metadata:
 spec:
   template:
     spec:
-      {{- if $global.k0sURL }}
-      downloadURL: "{{ $global.k0sURL }}/k0s-{{ .Values.k0s.version }}-{{ .Values.k0s.arch }}"
-      {{- end }}
-      {{- if or $global.registryCertSecret $global.k0sURLCertSecret }}
-      {{- $certs := dict "registry.crt" $global.registryCertSecret "k0s-url.crt" $global.k0sURLCertSecret }}
-      files:
-        {{- range $path, $secret := $certs }}
-        {{- if $secret }}
-        - contentFrom:
-            secretRef:
-              name: {{ $secret }}
-              key: ca.crt
-          permissions: "0664"
-          path: /usr/local/share/ca-certificates/{{ $path }}
-        {{- end }}
-        {{- end }}
-      preStartCommands:
-      - "sudo update-ca-certificates"
-      {{- end }}
       version: {{ .Values.k0s.version }}
       args:
-      - --enable-cloud-provider
-      - --kubelet-extra-args="--cloud-provider=external"
-      {{- range $arg := .Values.k0s.workerArgs }}
-      - {{ toYaml $arg }}
+        {{- range .Values.workerConfig.args }}
+        - {{ . }}
+        {{- end }}
+      {{- if .Values.workerConfig.postStartCommands }}
+      postStartCommands:
+        {{- toYaml .Values.workerConfig.postStartCommands | nindent 8 }}
+      {{- end }}
+      {{- if .Values.workerConfig.files }}
+      files:
+        {{- toYaml .Values.workerConfig.files | nindent 8 }}
+      {{- end }}
+      {{- if .Values.workerConfig.preInstallCommands }}
+      preInstallCommands:
+        {{- toYaml .Values.workerConfig.preInstallCommands | nindent 8 }}
       {{- end }}

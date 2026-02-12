@@ -1,9 +1,15 @@
+{{/*
+HetznerCluster resource - Hetzner Cloud infrastructure configuration
+This resource defines the Hetzner Cloud infrastructure including:
+- Load balancer for control plane access (forwards to hosted control plane)
+- Private networking configuration (optional)
+- SSH keys and placement groups for worker nodes
+- API token reference for Hetzner Cloud API access
+*/}}
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: HetznerCluster
 metadata:
   name: {{ include "cluster.name" . }}
-  annotations:
-    cluster.x-k8s.io/managed-by: k0smotron
   finalizers:
     - k0rdent.mirantis.com/cleanup
 spec:
@@ -28,11 +34,20 @@ spec:
   labels:
     {{- toYaml .Values.labels | nindent 4 }}
   {{- end }}
-  # No control plane load balancer needed for hosted control plane
-  # Control plane runs in management cluster and is exposed via k0smotron Service
+  controlPlaneLoadBalancer:
+    enabled: false  # Disabled for hosted control plane - uses management cluster ingress instead
   controlPlaneEndpoint:
-    host: ""
-    port: 6443
+    # Ingress configuration for worker nodes
+    # Worker nodes connect to control plane via ingress hostname
+    host: {{ .Values.controlPlane.ingress.apiHost | quote }}
+    port: 443  # HTTPS port for ingress
+  {{- if .Values.hcloudNetwork }}
+  hcloudNetwork:
+    enabled: {{ .Values.hcloudNetwork.enabled }}
+    cidrBlock: {{ .Values.hcloudNetwork.cidrBlock | quote }}
+    subnetCidrBlock: {{ .Values.hcloudNetwork.subnetCidrBlock | quote }}
+    networkZone: {{ .Values.hcloudNetwork.networkZone | quote }}
+  {{- end }}
   hetznerSecretRef:
     name: {{ .Values.tokenRef.name }}
     key:

@@ -1,4 +1,8 @@
-apiVersion: cluster.x-k8s.io/v1beta2
+{{/*
+Cluster resource - Root Cluster API resource that defines the cluster
+This resource references the K0smotronControlPlane (hosted control plane) and HetznerCluster (infrastructure)
+*/}}
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
   name: {{ include "cluster.name" . }}
@@ -14,10 +18,10 @@ spec:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   controlPlaneRef:
-    apiGroup: controlplane.cluster.x-k8s.io
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: K0smotronControlPlane
     name: {{ include "k0smotroncontrolplane.name" .  }}
   infrastructureRef:
-    apiGroup: infrastructure.cluster.x-k8s.io
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: HetznerCluster
     name: {{ include "cluster.name" . }}

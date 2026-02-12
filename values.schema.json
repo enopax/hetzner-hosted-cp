@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A KCM cluster hetzner-hosted-cp template with hosted control plane",
+  "type": "object",
+  "required": [
+    "workersNumber",
+    "region",
+    "tokenRef",
+    "k0s"
+  ],
+  "properties": {
+    "clusterAnnotations": {
+      "description": "Annotations to apply to the cluster",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "clusterLabels": {
+      "description": "Labels to apply to the cluster",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "clusterNetwork": {
+      "description": "The cluster network configuration",
+      "type": "object",
+      "properties": {
+        "pods": {
+          "description": "The network ranges from which Pod networks are allocated",
+          "type": "object",
+          "properties": {
+            "cidrBlocks": {
+              "description": "A list of CIDR blocks",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "services": {
+          "description": "The network ranges from which service VIPs are allocated",
+          "type": "object",
+          "properties": {
+            "cidrBlocks": {
+              "description": "A list of CIDR blocks",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "controlPlane": {
+      "description": "Hosted control plane configuration",
+      "type": "object",
+      "properties": {
+        "replicas": {
+          "description": "Number of control plane pod replicas",
+          "type": "integer",
+          "minimum": 1
+        },
+        "ingress": {
+          "description": "Ingress configuration for control plane access",
+          "type": "object",
+          "properties": {
+            "apiHost": {
+              "description": "Hostname for Kubernetes API",
+              "type": "string"
+            },
+            "konnectivityHost": {
+              "description": "Hostname for konnectivity server",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "hcloudNetwork": {
+      "description": "Hetzner Cloud Network configuration",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable Hetzner Cloud Network",
+          "type": "boolean"
+        },
+        "networkZone": {
+          "description": "The network zone (e.g., eu-central)",
+          "type": "string"
+        },
+        "cidrBlock": {
+          "description": "The CIDR block for the network",
+          "type": "string"
+        },
+        "subnetCidrBlock": {
+          "description": "The subnet CIDR block",
+          "type": "string"
+        }
+      }
+    },
+    "k0s": {
+      "description": "k0s specific settings",
+      "type": "object",
+      "properties": {
+        "version": {
+          "description": "The k0s version to use",
+          "type": "string"
+        },
+        "arch": {
+          "description": "k0s binary architecture",
+          "type": "string"
+        },
+        "api": {
+          "description": "k0s API configuration",
+          "type": "object"
+        },
+        "network": {
+          "description": "Network configuration for k0s",
+          "type": "object"
+        }
+      },
+      "required": ["version"]
+    },
+    "labels": {
+      "description": "Labels to apply to Hetzner resources",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "placementGroupName": {
+      "description": "Name of the placement group to use for nodes",
+      "type": "string"
+    },
+    "region": {
+      "description": "The Hetzner region name (e.g., fsn1, nbg1, hel1)",
+      "type": "string"
+    },
+    "sshKeyNames": {
+      "description": "SSH key names to use for cluster nodes",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tokenRef": {
+      "description": "Reference to the secret containing Hetzner API token",
+      "type": "object",
+      "required": ["name", "key"],
+      "properties": {
+        "key": {
+          "description": "Key in the secret containing the token",
+          "type": "string"
+        },
+        "name": {
+          "description": "Name of the secret",
+          "type": "string"
+        }
+      }
+    },
+    "worker": {
+      "description": "The configuration of the worker machines",
+      "type": "object",
+      "properties": {
+        "additionalSecurityGroups": {
+          "description": "Additional security groups to attach",
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "dataDisks": {
+          "description": "Additional data disks to attach",
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "image": {
+          "description": "The name of the Hetzner server image",
+          "type": "string"
+        },
+        "placementGroupName": {
+          "description": "The placement group name for worker nodes",
+          "type": "string"
+        },
+        "type": {
+          "description": "The type of Hetzner server to create (e.g., cx21, cpx21, cx31)",
+          "type": "string"
+        }
+      },
+      "required": ["image", "type"]
+    },
+    "workerConfig": {
+      "description": "The configuration of the k0s worker",
+      "type": "object",
+      "properties": {
+        "args": {
+          "description": "Extra arguments passed to the k0s worker",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "postStartCommands": {
+          "title": "Post-start commands",
+          "description": "Additional commands to run after k0s start",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "preInstallCommands": {
+          "title": "Pre-install commands",
+          "description": "Additional commands to run before k0s install",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "description": "Additional files to provision on worker nodes",
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "workersNumber": {
+      "description": "The number of the worker machines",
+      "minimum": 1,
+      "type": "integer"
+    }
+  }
+}
