@@ -19,11 +19,24 @@ jobs:
       - name: Lint chart
         run: helm lint .
 
-      - name: Template render test
+      - name: Template render test (NodePort mode)
         run: |
           helm template test . \
             --set workersNumber=1 \
             --set region=nbg1 \
             --set tokenRef.name=hcloud-token \
             --set k0s.version=v1.34.3+k0s.0 \
-            --set worker.type=cpx22
+            --set worker.type=cpx22 \
+            --set controlPlane.endpoint.host=10.0.0.1
+
+      - name: Template render test (Ingress mode)
+        run: |
+          helm template test . \
+            --set workersNumber=1 \
+            --set region=nbg1 \
+            --set tokenRef.name=hcloud-token \
+            --set k0s.version=v1.34.3+k0s.0 \
+            --set worker.type=cpx22 \
+            --set controlPlane.service.type=ClusterIP \
+            --set controlPlane.ingress.apiHost=api.test.example.com \
+            --set controlPlane.ingress.konnectivityHost=konnectivity.test.example.com
