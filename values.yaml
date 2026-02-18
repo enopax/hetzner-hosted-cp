@@ -2,17 +2,17 @@
 workersNumber: 2 # @schema description: The number of the worker machines; minimum: 1; type: integer; required: true
 
 # Control plane configuration (hosted in management cluster)
+# Two access modes supported:
+#   NodePort mode (default): Set controlPlane.endpoint.host + service.type=NodePort
+#   Ingress mode: Set controlPlane.ingress.apiHost + konnectivityHost (requires HAProxy ingress)
 controlPlane: # @schema description: Hosted control plane configuration; type: object
   replicas: 1 # @schema description: Number of control plane pod replicas; minimum: 1; type: integer
   service: # @schema description: Service configuration for control plane access; type: object
-    type: "ClusterIP" # @schema description: Service type for control plane (ClusterIP for ingress-based access); type: string
-    apiNodePort: 30443 # @schema description: NodePort for Kubernetes API access (unused with ClusterIP); type: integer; minimum: 30000; maximum: 32767
-    konnectivityNodePort: 30132 # @schema description: NodePort for konnectivity server (unused with ClusterIP); type: integer; minimum: 30000; maximum: 32767
-  endpoint: # @schema description: Control plane endpoint configuration for NodePort access; type: object
-    host: "" # @schema description: Management cluster node IP or hostname for NodePort access; type: string
-  ingress: # @schema description: Ingress configuration for control plane access via management cluster load balancer; type: object
-    apiHost: "" # @schema description: Hostname for Kubernetes API (e.g., api.cluster01.example.com); type: string
-    konnectivityHost: "" # @schema description: Hostname for konnectivity server (e.g., konnectivity.cluster01.example.com); type: string
+    type: "NodePort" # @schema description: Service type (NodePort or ClusterIP for ingress); type: string
+    apiNodePort: 30443 # @schema description: NodePort for Kubernetes API access; type: integer; minimum: 30000; maximum: 32767
+    konnectivityNodePort: 30132 # @schema description: NodePort for konnectivity server; type: integer; minimum: 30000; maximum: 32767
+  endpoint: # @schema description: Control plane endpoint for NodePort access; type: object
+    host: "" # @schema description: Management cluster node/LB IP for NodePort access (required for NodePort mode); type: string
 
 clusterNetwork: # @schema description: The cluster network configuration; type: object
   pods: # @schema description: The network ranges from which Pod networks are allocated; type: object

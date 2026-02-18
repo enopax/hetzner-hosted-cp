@@ -10,4 +10,4 @@ appVersion: v1.34.3+k0s.0
 description: 'A KCM template to deploy a k0s cluster on Hetzner Cloud with hosted control plane (k0smotron). Control plane runs as pods in the management cluster, worker nodes on Hetzner infrastructure.'
 name: hetzner-hosted-cp
 type: application
-version: 1.0.0
+version: 1.1.0

@@ -1,13 +1,11 @@
 {{/*
 K0smotronControlPlane resource - Hosted control plane configuration
 This resource defines a control plane that runs as pods in the management cluster
-instead of on dedicated infrastructure machines. It includes:
-- k0s version and replica configuration
-- Optional ingress configuration for hostname-based access (apiHost, konnectivityHost)
-- Embedded k0s configuration with Hetzner Cloud Controller Manager and CSI driver
-- Service configuration for control plane endpoint exposure
+instead of on dedicated infrastructure machines. It supports two access modes:
+- Ingress mode: hostname-based access via HAProxy ingress with SSL passthrough
+- NodePort mode: direct access via management cluster node IP and NodePort
 */}}
-{{- $global := .Values.global | default dict }}
+{{- $useIngress := and .Values.controlPlane.ingress .Values.controlPlane.ingress.apiHost }}
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: K0smotronControlPlane
 metadata:
@@ -15,27 +13,19 @@ metadata:
 spec:
   version: {{ .Values.k0s.version }}
   replicas: {{ .Values.controlPlane.replicas | default 1 }}
-  # External address configuration for k0smotron bootstrap process
-  # Use internal service address to avoid ingress/load balancer issues during bootstrap
-  externalAddress: "kmc-{{ include "cluster.name" . }}.{{ .Release.Namespace }}.svc.cluster.local"
-  # Ingress configuration enables hostname-based access to the control plane
-  # Required for worker nodes to connect to control plane via management cluster ingress
-  # Traffic flows: Worker Nodes -> Management LB -> HAProxy Ingress (SSL passthrough) -> Control Plane Pods
+  externalAddress: {{ if $useIngress }}"kmc-{{ include "cluster.name" . }}.{{ .Release.Namespace }}.svc.cluster.local"{{ else }}{{ .Values.controlPlane.endpoint.host | quote }}{{ end }}
+  {{- if $useIngress }}
+  # Ingress mode: hostname-based access via management cluster ingress
   ingress:
     enabled: true
-    className: haproxy  # Use HAProxy ingress class for SSL passthrough support
+    className: haproxy
     annotations:
-      haproxy.org/ssl-passthrough: "true"  # Enable SSL passthrough from management LB to control plane pods
-    {{- if .Values.controlPlane.ingress.apiHost }}
-    apiHost: {{ .Values.controlPlane.ingress.apiHost }}  # Hostname for Kubernetes API access (e.g., api.cluster01.example.com)
-    {{- end }}
-    {{- if .Values.controlPlane.ingress.konnectivityHost }}
-    konnectivityHost: {{ .Values.controlPlane.ingress.konnectivityHost }}  # Hostname for konnectivity server (e.g., konnectivity.cluster01.example.com)
-    {{- end }}
-  # Service configuration for control plane endpoint exposure
-  # ClusterIP is used for ingress-based access (k0smotron will handle internal routing)
+      haproxy.org/ssl-passthrough: "true"
+    apiHost: {{ .Values.controlPlane.ingress.apiHost }}
+    konnectivityHost: {{ .Values.controlPlane.ingress.konnectivityHost }}
+  {{- end }}
   service:
-    type: {{ .Values.controlPlane.service.type | default "ClusterIP" }}  # ClusterIP for ingress-based access
+    type: {{ .Values.controlPlane.service.type | default "ClusterIP" }}
     {{- if eq (.Values.controlPlane.service.type | default "ClusterIP") "NodePort" }}
     apiNodePort: {{ .Values.controlPlane.service.apiNodePort | default 30443 }}
     konnectivityNodePort: {{ .Values.controlPlane.service.konnectivityNodePort | default 30132 }}
@@ -48,13 +38,13 @@ spec:
     spec:
       api:
         sans:
+          {{- if $useIngress }}
           - {{ .Values.controlPlane.ingress.apiHost }}
           - {{ .Values.controlPlane.ingress.konnectivityHost }}
-          # Add management cluster node IPs for NodePort access
-          {{- if eq (.Values.controlPlane.service.type | default "NodePort") "NodePort" }}
-          - "k0rdent-cluster"  # Management cluster node hostname
           {{- end }}
-          # Add internal service hostname for k0smotron controller validation
+          {{- if and .Values.controlPlane.endpoint .Values.controlPlane.endpoint.host }}
+          - {{ .Values.controlPlane.endpoint.host | quote }}
+          {{- end }}
           - "kmc-{{ include "cluster.name" . }}.{{ .Release.Namespace }}.svc.cluster.local"
         extraArgs:
           anonymous-auth: "true"
@@ -64,8 +54,6 @@ spec:
       {{- with .Values.k0s.network }}
       network: {{ toYaml . | nindent 8 }}
       {{- end }}
-      # Configure k0s to use external cloud provider (Hetzner Cloud Controller Manager)
-      # This prevents k0s from trying to manage node addresses internally
       extensions:
         helm:
           repositories: []
