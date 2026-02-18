@@ -60,8 +60,40 @@
           "type": "integer",
           "minimum": 1
         },
+        "service": {
+          "description": "Service configuration for control plane access",
+          "type": "object",
+          "properties": {
+            "type": {
+              "description": "Service type (NodePort or ClusterIP for ingress)",
+              "type": "string"
+            },
+            "apiNodePort": {
+              "description": "NodePort for Kubernetes API access",
+              "type": "integer",
+              "minimum": 30000,
+              "maximum": 32767
+            },
+            "konnectivityNodePort": {
+              "description": "NodePort for konnectivity server",
+              "type": "integer",
+              "minimum": 30000,
+              "maximum": 32767
+            }
+          }
+        },
+        "endpoint": {
+          "description": "Control plane endpoint for NodePort access",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Management cluster node/LB IP for NodePort access",
+              "type": "string"
+            }
+          }
+        },
         "ingress": {
-          "description": "Ingress configuration for control plane access",
+          "description": "Ingress configuration for control plane access (alternative to NodePort)",
           "type": "object",
           "properties": {
             "apiHost": {

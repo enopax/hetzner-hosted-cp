@@ -1,7 +1,7 @@
 {{/*
 HetznerCluster resource - Hetzner Cloud infrastructure configuration
 This resource defines the Hetzner Cloud infrastructure including:
-- Load balancer for control plane access (forwards to hosted control plane)
+- Control plane endpoint configuration (via ingress hostname or NodePort)
 - Private networking configuration (optional)
 - SSH keys and placement groups for worker nodes
 - API token reference for Hetzner Cloud API access
@@ -35,12 +35,17 @@ spec:
     {{- toYaml .Values.labels | nindent 4 }}
   {{- end }}
   controlPlaneLoadBalancer:
-    enabled: false  # Disabled for hosted control plane - uses management cluster ingress instead
+    enabled: false  # Disabled for hosted control plane
   controlPlaneEndpoint:
-    # Ingress configuration for worker nodes
-    # Worker nodes connect to control plane via ingress hostname
+    {{- if and .Values.controlPlane.ingress .Values.controlPlane.ingress.apiHost }}
+    # Ingress mode: workers connect via ingress hostname
     host: {{ .Values.controlPlane.ingress.apiHost | quote }}
-    port: 443  # HTTPS port for ingress
+    port: 443
+    {{- else }}
+    # NodePort mode: workers connect via management cluster node IP
+    host: {{ required "controlPlane.endpoint.host is required when ingress is not configured" .Values.controlPlane.endpoint.host | quote }}
+    port: {{ .Values.controlPlane.service.apiNodePort | default 30443 }}
+    {{- end }}
   {{- if .Values.hcloudNetwork }}
   hcloudNetwork:
     enabled: {{ .Values.hcloudNetwork.enabled }}
