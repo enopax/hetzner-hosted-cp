@@ -1,11 +1,12 @@
 {{/*
 HetznerCluster resource - Hetzner Cloud infrastructure configuration
-This resource defines the Hetzner Cloud infrastructure including:
-- Control plane endpoint configuration (via ingress hostname or NodePort)
-- Private networking configuration (optional)
-- SSH keys and placement groups for worker nodes
-- API token reference for Hetzner Cloud API access
+Supports three control plane access modes:
+- LoadBalancer (default): Hetzner CCM provisions a dedicated LB for the hosted control plane
+- NodePort: Workers connect via management cluster node/LB IP and NodePort
+- Ingress: Workers connect via HAProxy ingress hostnames
 */}}
+{{- $useIngress := and .Values.controlPlane.ingress .Values.controlPlane.ingress.apiHost }}
+{{- $useLB := eq (.Values.controlPlane.service.type | default "LoadBalancer") "LoadBalancer" }}
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: HetznerCluster
 metadata:
@@ -35,15 +36,19 @@ spec:
     {{- toYaml .Values.labels | nindent 4 }}
   {{- end }}
   controlPlaneLoadBalancer:
-    enabled: false  # Disabled for hosted control plane
+    enabled: false  # Disabled for hosted control plane (handled by k0smotron service)
   controlPlaneEndpoint:
-    {{- if and .Values.controlPlane.ingress .Values.controlPlane.ingress.apiHost }}
-    # Ingress mode: workers connect via ingress hostname
+    {{- if $useIngress }}
     host: {{ .Values.controlPlane.ingress.apiHost | quote }}
     port: 443
+    {{- else if $useLB }}
+    # LoadBalancer mode: endpoint will be populated by Hetzner CCM
+    # Temporary placeholder - CAPH requires a non-empty host
+    host: {{ .Values.controlPlane.endpoint.host | default "pending" | quote }}
+    port: 6443
     {{- else }}
-    # NodePort mode: workers connect via management cluster node IP
-    host: {{ required "controlPlane.endpoint.host is required when ingress is not configured" .Values.controlPlane.endpoint.host | quote }}
+    # NodePort mode
+    host: {{ required "controlPlane.endpoint.host is required for NodePort mode" .Values.controlPlane.endpoint.host | quote }}
     port: {{ .Values.controlPlane.service.apiNodePort | default 30443 }}
     {{- end }}
   {{- if .Values.hcloudNetwork }}

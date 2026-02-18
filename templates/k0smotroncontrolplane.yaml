@@ -1,11 +1,12 @@
 {{/*
 K0smotronControlPlane resource - Hosted control plane configuration
-This resource defines a control plane that runs as pods in the management cluster
-instead of on dedicated infrastructure machines. It supports two access modes:
-- Ingress mode: hostname-based access via HAProxy ingress with SSL passthrough
-- NodePort mode: direct access via management cluster node IP and NodePort
+Supports three access modes:
+- LoadBalancer (default): Hetzner CCM creates a dedicated LB, k0smotron discovers its IP
+- NodePort: Workers connect via management cluster node/LB IP and NodePort
+- Ingress: Workers connect via HAProxy ingress hostnames with SSL passthrough
 */}}
 {{- $useIngress := and .Values.controlPlane.ingress .Values.controlPlane.ingress.apiHost }}
+{{- $useLB := eq (.Values.controlPlane.service.type | default "LoadBalancer") "LoadBalancer" }}
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: K0smotronControlPlane
 metadata:
@@ -13,9 +14,13 @@ metadata:
 spec:
   version: {{ .Values.k0s.version }}
   replicas: {{ .Values.controlPlane.replicas | default 1 }}
-  externalAddress: {{ if $useIngress }}"kmc-{{ include "cluster.name" . }}.{{ .Release.Namespace }}.svc.cluster.local"{{ else }}{{ .Values.controlPlane.endpoint.host | quote }}{{ end }}
   {{- if $useIngress }}
-  # Ingress mode: hostname-based access via management cluster ingress
+  externalAddress: "kmc-{{ include "cluster.name" . }}.{{ .Release.Namespace }}.svc.cluster.local"
+  {{- else if not $useLB }}
+  externalAddress: {{ .Values.controlPlane.endpoint.host | quote }}
+  {{- end }}
+  {{- /* For LoadBalancer mode, omit externalAddress so k0smotron discovers it from the service */}}
+  {{- if $useIngress }}
   ingress:
     enabled: true
     className: haproxy
@@ -25,10 +30,14 @@ spec:
     konnectivityHost: {{ .Values.controlPlane.ingress.konnectivityHost }}
   {{- end }}
   service:
-    type: {{ .Values.controlPlane.service.type | default "ClusterIP" }}
-    {{- if eq (.Values.controlPlane.service.type | default "ClusterIP") "NodePort" }}
+    type: {{ .Values.controlPlane.service.type | default "LoadBalancer" }}
+    {{- if eq (.Values.controlPlane.service.type | default "LoadBalancer") "NodePort" }}
     apiNodePort: {{ .Values.controlPlane.service.apiNodePort | default 30443 }}
     konnectivityNodePort: {{ .Values.controlPlane.service.konnectivityNodePort | default 30132 }}
+    {{- end }}
+    {{- if eq (.Values.controlPlane.service.type | default "LoadBalancer") "LoadBalancer" }}
+    annotations:
+      load-balancer.hetzner.cloud/location: {{ .Values.region }}
     {{- end }}
   k0sConfig:
     apiVersion: k0s.k0sproject.io/v1beta1

@@ -2,17 +2,18 @@
 workersNumber: 2 # @schema description: The number of the worker machines; minimum: 1; type: integer; required: true
 
 # Control plane configuration (hosted in management cluster)
-# Two access modes supported:
-#   NodePort mode (default): Set controlPlane.endpoint.host + service.type=NodePort
-#   Ingress mode: Set controlPlane.ingress.apiHost + konnectivityHost (requires HAProxy ingress)
+# Three access modes supported:
+#   LoadBalancer (default): Hetzner CCM creates a dedicated LB for control plane access
+#   NodePort: Set service.type=NodePort + controlPlane.endpoint.host
+#   Ingress: Set controlPlane.ingress.apiHost + konnectivityHost (requires HAProxy ingress)
 controlPlane: # @schema description: Hosted control plane configuration; type: object
   replicas: 1 # @schema description: Number of control plane pod replicas; minimum: 1; type: integer
   service: # @schema description: Service configuration for control plane access; type: object
-    type: "NodePort" # @schema description: Service type (NodePort or ClusterIP for ingress); type: string
-    apiNodePort: 30443 # @schema description: NodePort for Kubernetes API access; type: integer; minimum: 30000; maximum: 32767
-    konnectivityNodePort: 30132 # @schema description: NodePort for konnectivity server; type: integer; minimum: 30000; maximum: 32767
-  endpoint: # @schema description: Control plane endpoint for NodePort access; type: object
-    host: "" # @schema description: Management cluster node/LB IP for NodePort access (required for NodePort mode); type: string
+    type: "LoadBalancer" # @schema description: Service type (LoadBalancer, NodePort, or ClusterIP for ingress); type: string
+    apiNodePort: 30443 # @schema description: NodePort for Kubernetes API access (only for NodePort mode); type: integer; minimum: 30000; maximum: 32767
+    konnectivityNodePort: 30132 # @schema description: NodePort for konnectivity server (only for NodePort mode); type: integer; minimum: 30000; maximum: 32767
+  endpoint: # @schema description: Control plane endpoint configuration; type: object
+    host: "" # @schema description: Management cluster node/LB IP (required for NodePort mode, optional for LoadBalancer); type: string
 
 clusterNetwork: # @schema description: The cluster network configuration; type: object
   pods: # @schema description: The network ranges from which Pod networks are allocated; type: object
