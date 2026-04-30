@@ -32,8 +32,8 @@ spec:
   service:
     type: {{ .Values.controlPlane.service.type | default "LoadBalancer" }}
     {{- if eq (.Values.controlPlane.service.type | default "LoadBalancer") "NodePort" }}
-    apiNodePort: {{ .Values.controlPlane.service.apiNodePort | default 30443 }}
-    konnectivityNodePort: {{ .Values.controlPlane.service.konnectivityNodePort | default 30132 }}
+    apiPort: {{ .Values.controlPlane.service.apiNodePort | default 30443 }}
+    konnectivityPort: {{ .Values.controlPlane.service.konnectivityNodePort | default 30132 }}
     {{- end }}
     {{- if eq (.Values.controlPlane.service.type | default "LoadBalancer") "LoadBalancer" }}
     annotations:
