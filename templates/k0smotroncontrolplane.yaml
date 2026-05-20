@@ -65,7 +65,47 @@ spec:
       {{- end }}
       extensions:
         helm:
+          {{- if and .Values.controlPlane.ccm .Values.controlPlane.ccm.enabled }}
+          {{- if $useLB }}
+          {{- fail "controlPlane.ccm.enabled=true is not supported in LoadBalancer mode (LB IP is not known at bootstrap time). Use ingress or NodePort mode, or deploy CCM separately." }}
+          {{- end }}
+          repositories:
+            - name: hcloud
+              url: https://charts.hetzner.cloud
+          charts:
+            - name: hcloud-cloud-controller-manager
+              chartname: hcloud/hcloud-cloud-controller-manager
+              namespace: kube-system
+              {{- if .Values.controlPlane.ccm.chartVersion }}
+              version: {{ .Values.controlPlane.ccm.chartVersion | quote }}
+              {{- end }}
+              values: |
+                env:
+                  HCLOUD_TOKEN:
+                    valueFrom:
+                      secretKeyRef:
+                        name: {{ .Values.tokenRef.name }}
+                        key: {{ .Values.tokenRef.key }}
+                  {{- if $useIngress }}
+                  KUBERNETES_SERVICE_HOST:
+                    value: {{ .Values.controlPlane.ingress.apiHost | quote }}
+                  KUBERNETES_SERVICE_PORT:
+                    value: "443"
+                  {{- else }}
+                  KUBERNETES_SERVICE_HOST:
+                    value: {{ .Values.controlPlane.endpoint.host | quote }}
+                  KUBERNETES_SERVICE_PORT:
+                    value: {{ .Values.controlPlane.service.apiNodePort | default 30443 | quote }}
+                  {{- end }}
+                networking:
+                  enabled: {{ .Values.hcloudNetwork.enabled }}
+                additionalTolerations:
+                  - key: node.cloudprovider.kubernetes.io/uninitialized
+                    value: "true"
+                    effect: NoSchedule
+          {{- else }}
           repositories: []
           charts: []
+          {{- end }}
       telemetry:
         enabled: false

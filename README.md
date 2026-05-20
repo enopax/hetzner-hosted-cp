@@ -2,6 +2,41 @@
 
 A Helm chart for deploying Kubernetes clusters on Hetzner Cloud using k0smotron's hosted control plane architecture. This chart enables cost-effective cluster provisioning by running control plane components as pods within the management cluster while worker nodes are provisioned on Hetzner Cloud infrastructure.
 
+## What's new in 1.3.0
+
+Chart bump targeting k0rdent v1.9.0. Cherry-picks improvements from `k0rdent-oot/hetzner-hosted-cp` upstream and from an internal redesign proposal, while keeping the existing multi-mode access work.
+
+### Added
+
+| Feature | What | Why |
+|---|---|---|
+| `appVersion: 1.9.0` + `k0rdent.mirantis.com/min-version` annotation | Chart now declares its k0rdent dependency | Mirantis tooling can refuse to install against older mgmt clusters |
+| `k0s v1.34.4+k0s.0` (was v1.34.3) | Default k0s version bump | New k0s ships with k0smotron ingress field rename (`apiPort`/`konnectivityPort`) plus security fixes |
+| **CCM-in-child** (`controlPlane.ccm.enabled`) | Optional: deploy `hcloud-cloud-controller-manager` inside the child cluster via `k0sConfig.extensions.helm` instead of separately in the management cluster | Solves the chicken-and-egg with the internal `kubernetes` service. Worker nodes initialise faster, less manual post-bootstrap manifests to apply |
+| **Hetzner worker `preStartCommands` defaults** | systemd-resolved disable, `/etc/resolv.conf` reset to Cloudflare DNS, `swapoff -a`, fstab swap commenting | Hetzner ubuntu-24.04 images ship with systemd-resolved which interferes with coredns. Without this fix workers come up but DNS in the cluster is flaky |
+| `preStartCommands` block in `K0sWorkerConfigTemplate` | New override knob in addition to existing `preInstallCommands` / `postStartCommands` | Lets users add their own pre-k0s-start hooks |
+
+### Kept (intentionally — these were proposed for removal in a competing 1.3.0 draft)
+
+| Feature | Why we kept it |
+|---|---|
+| **Multi-mode access** (`LoadBalancer` / `NodePort` / `Ingress`) | NodePort is the simplest mode for dev/demo (no DNS needed); LoadBalancer is the simplest for production-without-ingress; Ingress is the cheapest at scale. All three have real callers in our infra |
+| **KCM `@schema` annotations on `values.yaml`** | k0rdent UI uses these for auto-discovery and form generation |
+| **`_helpers.tpl`** | Centralised name generation, no `{{ .Values.clusterName }}` sprinkled throughout templates |
+| **`placementGroupName`, `hcloudNetwork`, `dataDisks`, `additionalSecurityGroups`** | Real Hetzner features used by real users. Removing them breaks HA setups and existing deployments |
+| **`sshKeyNames` (list)** | Most operators have multiple keys (deploy + admin + CI). Single-key was a regression |
+| **`tokenRef` pattern** | CAPH-standard. Tooling elsewhere expects `hcloud-token` as the secret key, not a hardcoded `hcloud` |
+| **`clusterLabels` / `clusterAnnotations` / KCM cleanup finalizer** | Required for cluster tagging and clean KCM lifecycle |
+
+### Removed
+
+Nothing — this is a backwards-compatible upgrade. Existing values files continue to work; `controlPlane.ccm.enabled` defaults to `false` to preserve the legacy "deploy CCM separately into the user cluster" workflow.
+
+### Upgrade notes
+
+- If you previously rendered against the old defaults you now also get `preStartCommands` applied — these are no-ops on most Hetzner ubuntu-24.04 images, but if you have a custom image without systemd-resolved set `workerConfig.preStartCommands: []` to silence them.
+- Setting `controlPlane.ccm.enabled=true` in **LoadBalancer mode** fails the helm render with a helpful error (the LB IP isn't known at bootstrap time). Use ingress or NodePort mode, or keep CCM deployed separately.
+
 ## Architecture Overview
 
 ### Hosted Control Plane Architecture
@@ -92,9 +127,9 @@ Before deploying hosted control plane clusters, the management cluster MUST have
 
 ### Software Requirements
 
-- **k0rdent**: v1.6.0 or newer
-- **k0smotron**: v1.10.2 or newer  
-- **Cluster API**: v1.0.7 or newer
+- **k0rdent**: v1.9.0 or newer (declared via the `k0rdent.mirantis.com/min-version` annotation in `Chart.yaml`)
+- **k0s**: v1.34.4+k0s.0 (default in `values.yaml`)
+- **k0smotron**: bundled with k0rdent 1.9.0
 - **CAPH (Cluster API Provider Hetzner)**: v1.0.7 or newer
 - **Hetzner Cloud API Token**: With appropriate permissions
 
@@ -185,9 +220,7 @@ When ingress is enabled:
 - DNS must be configured to point hostnames to the ingress controller
 - See [k0smotron ingress documentation](https://docs.k0smotron.io/stable/ingress-support/) for detailed setup
 
-#### HAProxy Sidecar Configuration
-
-Enable additional worker configuration:
+#### Worker lifecycle hooks
 
 ```yaml
 workerConfig:
@@ -195,12 +228,32 @@ workerConfig:
     - --enable-cloud-provider
     - --kubelet-extra-args="--cloud-provider=external"
   preInstallCommands:
-    - "echo 'Setting up worker node'"
+    - "echo 'Before k0s install'"
+  preStartCommands:
+    - "echo 'Before k0s start (defaults include systemd-resolved disable and swap off for Hetzner)'"
   postStartCommands:
-    - "echo 'Worker node ready'"
+    - "echo 'After k0s start'"
 ```
 
-This allows customization of the k0s worker configuration and lifecycle hooks.
+Three phases are exposed:
+- `preInstallCommands` — before `k0s install`
+- `preStartCommands` — after install, before `systemctl start k0sworker`. **The chart ships defaults** to work around Hetzner ubuntu-24.04 quirks (systemd-resolved + swap). Override with `workerConfig.preStartCommands: []` to disable, or extend with your own
+- `postStartCommands` — after the worker is up
+
+#### CCM in child cluster (new in 1.3.0)
+
+```yaml
+controlPlane:
+  ccm:
+    enabled: true
+    chartVersion: ""  # empty = latest hcloud-cloud-controller-manager
+```
+
+When enabled, k0smotron deploys `hcloud-cloud-controller-manager` into the child cluster as part of bootstrap (via `k0sConfig.extensions.helm`). This avoids the chicken-and-egg between the in-cluster `kubernetes` service and the CCM that's supposed to make it work. Required values:
+- `tokenRef.name` / `tokenRef.key` — the chart reuses the Hetzner token secret for the CCM
+- Either `controlPlane.ingress.apiHost` (ingress mode) or `controlPlane.endpoint.host` + `service.apiNodePort` (NodePort mode)
+
+LoadBalancer mode is intentionally unsupported here — the LB IP isn't known at bootstrap time, so CCM-in-child would not be able to reach the API. Use ingress/NodePort, or keep `ccm.enabled=false` and deploy CCM separately.
 
 #### Private Networking
 

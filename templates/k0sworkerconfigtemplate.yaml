@@ -18,6 +18,14 @@ spec:
         {{- range .Values.workerConfig.args }}
         - {{ . }}
         {{- end }}
+      {{- if .Values.workerConfig.preInstallCommands }}
+      preInstallCommands:
+        {{- toYaml .Values.workerConfig.preInstallCommands | nindent 8 }}
+      {{- end }}
+      {{- if .Values.workerConfig.preStartCommands }}
+      preStartCommands:
+        {{- toYaml .Values.workerConfig.preStartCommands | nindent 8 }}
+      {{- end }}
       {{- if .Values.workerConfig.postStartCommands }}
       postStartCommands:
         {{- toYaml .Values.workerConfig.postStartCommands | nindent 8 }}
@@ -25,8 +33,4 @@ spec:
       {{- if .Values.workerConfig.files }}
       files:
         {{- toYaml .Values.workerConfig.files | nindent 8 }}
-      {{- end }}
-      {{- if .Values.workerConfig.preInstallCommands }}
-      preInstallCommands:
-        {{- toYaml .Values.workerConfig.preInstallCommands | nindent 8 }}
       {{- end }}

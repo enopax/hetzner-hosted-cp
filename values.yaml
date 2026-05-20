@@ -14,6 +14,9 @@ controlPlane: # @schema description: Hosted control plane configuration; type: o
     konnectivityNodePort: 30132 # @schema description: NodePort for konnectivity server (only for NodePort mode); type: integer; minimum: 30000; maximum: 32767
   endpoint: # @schema description: Control plane endpoint configuration; type: object
     host: "" # @schema description: Management cluster node/LB IP (required for NodePort mode, optional for LoadBalancer); type: string
+  ccm: # @schema description: Deploy Hetzner CCM inside the child cluster via k0s helm extension (recommended for new installs); type: object
+    enabled: false # @schema description: When true, k0smotron deploys hcloud-cloud-controller-manager into the child cluster as part of bootstrap. Avoids the chicken-and-egg with the internal kubernetes service. Only works for ingress and NodePort modes (LoadBalancer mode would need the LB IP up front).; type: boolean
+    chartVersion: "" # @schema description: Pin the hcloud-cloud-controller-manager chart version. Empty means latest.; type: string
 
 clusterNetwork: # @schema description: The cluster network configuration; type: object
   pods: # @schema description: The network ranges from which Pod networks are allocated; type: object
@@ -52,7 +55,7 @@ worker: # @schema description: The configuration of the worker machines; type: o
 
 # k0s parameters
 k0s: # @schema description: k0s specific settings; type: object
-  version: v1.34.3+k0s.0 # @schema description: The k0s version to use; type: string; required: true
+  version: v1.34.4+k0s.0 # @schema description: The k0s version to use; type: string; required: true
   arch: amd64 # @schema description: k0s binary architecture; type: string
   api: # @schema description: k0s API configuration; type: object
     extraArgs: {} # @schema description: Extra arguments for the k0s API; type: object; additionalProperties: true
@@ -64,13 +67,21 @@ workerConfig: # @schema description: The configuration of the k0s worker; type: 
   args: # @schema description: Extra arguments passed to the k0s worker; type: array; item: string
     - --enable-cloud-provider
     - --kubelet-extra-args="--cloud-provider=external"
+  # Hetzner ubuntu-24.04 ships with systemd-resolved which interferes with coredns;
+  # also k0s requires swap off. These defaults come from k0rdent-oot/hetzner-hosted-cp upstream.
+  preStartCommands: # @schema title: Pre-start commands; description: Commands to run before k0s starts (workaround for Hetzner image quirks by default); type: array; item: string
+    - systemctl disable --now systemd-resolved || true
+    - rm -f /etc/resolv.conf && printf "nameserver 1.1.1.1\nnameserver 1.0.0.1\nnameserver 2606:4700:4700::1111\n" > /etc/resolv.conf
+    - swapoff -a || true
+    - sed -i '/ swap / s/^/#/' /etc/fstab || true
   postStartCommands: [] # @schema title: Post-start commands; description: Additional commands to run after k0s start; type: array; item: string
   preInstallCommands: [] # @schema title: Pre-install commands; description: Additional commands to run before k0s install; type: array; item: string
   files: [] # @schema description: Additional files to provision on worker nodes; type: array; items: object
 
-# NOTE: Cloud Controller Manager (CCM) is no longer deployed by this chart
-# The CCM must be deployed separately to the user cluster after provisioning
-# Use: kubectl --kubeconfig=<user-cluster-kubeconfig> apply -f manifests/user-cluster/hcloud-ccm-user-cluster.yaml
-# 
-# This change was made because the CCM needs to run in the user cluster,
-# not in the management cluster where the Helm chart is installed.
+# CCM deployment strategy
+# - controlPlane.ccm.enabled=false (default): CCM must be deployed separately into the child cluster
+#   (e.g. via `kubectl --kubeconfig=<user-cluster-kubeconfig> apply -f manifests/user-cluster/hcloud-ccm-user-cluster.yaml`)
+#   This keeps backwards compatibility with the existing infra/k0cluster setup.
+# - controlPlane.ccm.enabled=true: k0smotron deploys CCM into the child as part of bootstrap via
+#   k0sConfig.extensions.helm. Resolves the chicken-and-egg with the internal kubernetes service by
+#   setting KUBERNETES_SERVICE_HOST/PORT to the external apiHost (ingress mode) or endpoint.host (NodePort).
