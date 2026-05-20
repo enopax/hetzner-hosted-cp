@@ -1,71 +1,51 @@
-{{/*
-K0smotronControlPlane resource - Hosted control plane configuration
-Supports three access modes:
-- LoadBalancer (default): Hetzner CCM creates a dedicated LB, k0smotron discovers its IP
-- NodePort: Workers connect via management cluster node/LB IP and NodePort
-- Ingress: Workers connect via HAProxy ingress hostnames with SSL passthrough
-*/}}
-{{- $useIngress := and .Values.controlPlane.ingress .Values.controlPlane.ingress.apiHost }}
-{{- $useLB := eq (.Values.controlPlane.service.type | default "LoadBalancer") "LoadBalancer" }}
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: K0smotronControlPlane
 metadata:
-  name: {{ include "k0smotroncontrolplane.name" . }}
+  name: {{ .Values.clusterName }}-cp
+  namespace: {{ .Release.Namespace }}
 spec:
   version: {{ .Values.k0s.version }}
-  replicas: {{ .Values.controlPlane.replicas | default 1 }}
-  {{- if $useIngress }}
-  externalAddress: "kmc-{{ include "cluster.name" . }}.{{ .Release.Namespace }}.svc.cluster.local"
-  {{- else if not $useLB }}
-  externalAddress: {{ .Values.controlPlane.endpoint.host | quote }}
-  {{- end }}
-  {{- /* For LoadBalancer mode, omit externalAddress so k0smotron discovers it from the service */}}
-  {{- if $useIngress }}
-  ingress:
-    enabled: true
-    className: haproxy
-    annotations:
-      haproxy.org/ssl-passthrough: "true"
-    apiHost: {{ .Values.controlPlane.ingress.apiHost }}
-    konnectivityHost: {{ .Values.controlPlane.ingress.konnectivityHost }}
-  {{- end }}
+  persistence:
+    type: emptyDir
   service:
-    type: {{ .Values.controlPlane.service.type | default "LoadBalancer" }}
-    {{- if eq (.Values.controlPlane.service.type | default "LoadBalancer") "NodePort" }}
-    apiPort: {{ .Values.controlPlane.service.apiNodePort | default 30443 }}
-    konnectivityPort: {{ .Values.controlPlane.service.konnectivityNodePort | default 30132 }}
-    {{- end }}
-    {{- if eq (.Values.controlPlane.service.type | default "LoadBalancer") "LoadBalancer" }}
+    type: ClusterIP
+    apiPort: 6443
+    konnectivityPort: 8132
+  {{- if and .Values.ingress.enabled .Values.ingress.apiHost .Values.ingress.konnectivityHost }}
+  ingress:
+    deploy: true
+    apiHost: {{ .Values.ingress.apiHost }}
+    konnectivityHost: {{ .Values.ingress.konnectivityHost }}
+    className: {{ .Values.ingress.className }}
+    port: {{ .Values.ingress.port }}
+    {{- if .Values.ingress.annotations }}
     annotations:
-      load-balancer.hetzner.cloud/location: {{ .Values.region }}
+      {{- toYaml .Values.ingress.annotations | nindent 6 }}
     {{- end }}
   k0sConfig:
     apiVersion: k0s.k0sproject.io/v1beta1
     kind: ClusterConfig
-    metadata:
-      name: k0s
     spec:
-      api:
-        sans:
-          {{- if $useIngress }}
-          - {{ .Values.controlPlane.ingress.apiHost }}
-          - {{ .Values.controlPlane.ingress.konnectivityHost }}
-          {{- end }}
-          {{- if and .Values.controlPlane.endpoint .Values.controlPlane.endpoint.host }}
-          - {{ .Values.controlPlane.endpoint.host | quote }}
-          {{- end }}
-          - "kmc-{{ include "cluster.name" . }}.{{ .Release.Namespace }}.svc.cluster.local"
-        extraArgs:
-          anonymous-auth: "true"
-          {{- with .Values.k0s.api.extraArgs }}
-          {{- toYaml . | nindent 10 }}
-          {{- end }}
-      {{- with .Values.k0s.network }}
-      network: {{ toYaml . | nindent 8 }}
-      {{- end }}
       extensions:
         helm:
-          repositories: []
-          charts: []
-      telemetry:
-        enabled: false
+          repositories:
+            - name: hcloud
+              url: https://charts.hetzner.cloud
+          charts:
+            - name: hcloud-cloud-controller-manager
+              chartname: hcloud/hcloud-cloud-controller-manager
+              namespace: kube-system
+              values: |
+                env:
+                  HCLOUD_TOKEN:
+                    valueFrom:
+                      secretKeyRef:
+                        name: hetzner
+                        key: hcloud
+                  KUBERNETES_SERVICE_HOST:
+                    value: {{ .Values.ingress.apiHost | quote }}
+                  KUBERNETES_SERVICE_PORT:
+                    value: {{ .Values.ingress.port | quote }}
+                networking:
+                  enabled: true
+  {{- end }}

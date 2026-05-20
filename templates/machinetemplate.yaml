@@ -1,0 +1,12 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HCloudMachineTemplate
+metadata:
+  name: {{ .Values.clusterName }}-mt
+  namespace: {{ .Release.Namespace }}
+spec:
+  template:
+    spec:
+      imageName: {{ .Values.worker.imageName }}
+      type: {{ .Values.worker.serverType }}
+      sshKeys:
+        - name: {{ .Values.sshKeyName }}
