@@ -40,12 +40,12 @@ spec:
                   HCLOUD_TOKEN:
                     valueFrom:
                       secretKeyRef:
-                        name: hetzner
-                        key: hcloud
+                        name: hcloud
+                        key: token
                   KUBERNETES_SERVICE_HOST:
                     value: {{ .Values.ingress.apiHost | quote }}
                   KUBERNETES_SERVICE_PORT:
                     value: {{ .Values.ingress.port | quote }}
                 networking:
-                  enabled: true
+                  enabled: false
   {{- end }}
