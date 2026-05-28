@@ -11,6 +11,8 @@ apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: HetznerCluster
 metadata:
   name: {{ include "cluster.name" . }}
+  annotations:
+    helm.sh/resource-policy: keep
   finalizers:
     - k0rdent.mirantis.com/cleanup
 spec:
