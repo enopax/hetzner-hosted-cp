@@ -1,14 +1,32 @@
+{{/*
+K0sWorkerConfigTemplate resource - Worker node k0s configuration
+This resource defines the k0s configuration for worker nodes including:
+- k0s version and command-line arguments (cloud provider integration)
+- Optional pre-install and post-start commands
+- Optional file provisioning
+Note: HAProxy sidecar functionality is handled natively by k0smotron
+*/}}
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: K0sWorkerConfigTemplate
 metadata:
-  name: {{ .Values.clusterName }}-machine-config
-  namespace: {{ .Release.Namespace }}
+  name: {{ include "k0sworkerconfigtemplate.name" . }}
 spec:
   template:
     spec:
       version: {{ .Values.k0s.version }}
       args:
-        - --labels=node.kubernetes.io/role=worker
-      {{- if .Values.ingress.enabled }}
-        - --kubelet-extra-args="--cloud-provider=external"
+        {{- range .Values.workerConfig.args }}
+        - {{ . }}
+        {{- end }}
+      {{- if .Values.workerConfig.postStartCommands }}
+      postStartCommands:
+        {{- toYaml .Values.workerConfig.postStartCommands | nindent 8 }}
+      {{- end }}
+      {{- if .Values.workerConfig.files }}
+      files:
+        {{- toYaml .Values.workerConfig.files | nindent 8 }}
+      {{- end }}
+      {{- if .Values.workerConfig.preInstallCommands }}
+      preInstallCommands:
+        {{- toYaml .Values.workerConfig.preInstallCommands | nindent 8 }}
       {{- end }}
