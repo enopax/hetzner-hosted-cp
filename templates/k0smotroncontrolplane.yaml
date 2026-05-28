@@ -25,13 +25,38 @@ spec:
   k0sConfig:
     apiVersion: k0s.k0sproject.io/v1beta1
     kind: ClusterConfig
+    metadata:
+      name: k0s
     spec:
+      network:
+        provider: custom
+        podCIDR: {{ .Values.clusterNetwork.pods.cidrBlock }}
+        serviceCIDR: {{ .Values.clusterNetwork.services.cidrBlock }}
       extensions:
         helm:
           repositories:
+            - name: cilium
+              url: https://helm.cilium.io/
             - name: hcloud
               url: https://charts.hetzner.cloud
           charts:
+            - name: cilium
+              chartname: cilium/cilium
+              version: "1.17.1"
+              namespace: kube-system
+              values: |
+                k8sServiceHost: {{ .Values.ingress.apiHost }}
+                k8sServicePort: {{ .Values.ingress.port | quote }}
+                routingMode: tunnel
+                tunnelProtocol: vxlan
+                operator:
+                  replicas: 1
+                ipam:
+                  mode: cluster-pool
+                  operator:
+                    clusterPoolIPv4PodCIDRList:
+                      - {{ .Values.clusterNetwork.pods.cidrBlock }}
+                    clusterPoolIPv4MaskSize: 24
             - name: hcloud-cloud-controller-manager
               chartname: hcloud/hcloud-cloud-controller-manager
               namespace: kube-system
@@ -47,14 +72,12 @@ spec:
                   KUBERNETES_SERVICE_PORT:
                     value: {{ .Values.ingress.port | quote }}
                 networking:
-                  enabled: true
-                  clusterCIDR: 10.244.0.0/16
-                  network:
-                    value: ""
-                    valueFrom: null
+                  enabled: false
                 additionalTolerations:
                   - key: node.kubernetes.io/not-ready
                     effect: NoSchedule
                   - key: node.kubernetes.io/unreachable
                     effect: NoSchedule
+      telemetry:
+        enabled: false
   {{- end }}

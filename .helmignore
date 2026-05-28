@@ -1,0 +1,8 @@
+.git
+.gitignore
+*.tgz
+docs/
+tests/
+test-values.yaml
+README.md
+VERIFICATION.md
