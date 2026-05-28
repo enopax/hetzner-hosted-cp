@@ -5,6 +5,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
   annotations:
     cluster.x-k8s.io/managed-by: k0smotron
+    helm.sh/resource-policy: keep
 spec:
   controlPlaneLoadBalancer:
     enabled: false
