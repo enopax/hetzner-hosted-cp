@@ -51,6 +51,9 @@ spec:
                 tunnelProtocol: vxlan
                 operator:
                   replicas: 1
+                  hostNetwork: true
+                  tolerations:
+                    - operator: Exists
                 ipam:
                   mode: cluster-pool
                   operator:
