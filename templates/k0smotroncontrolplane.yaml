@@ -65,7 +65,27 @@ spec:
       {{- end }}
       extensions:
         helm:
-          repositories: []
-          charts: []
+          repositories:
+            - name: hcloud
+              url: https://charts.hetzner.cloud
+          charts:
+            - name: hcloud-cloud-controller-manager
+              chartname: hcloud/hcloud-cloud-controller-manager
+              namespace: kube-system
+              values: |
+                env:
+                  HCLOUD_TOKEN:
+                    valueFrom:
+                      secretKeyRef:
+                        name: hcloud
+                        key: token
+                {{- if $useIngress }}
+                  KUBERNETES_SERVICE_HOST:
+                    value: {{ .Values.controlPlane.ingress.apiHost | quote }}
+                  KUBERNETES_SERVICE_PORT:
+                    value: "443"
+                {{- end }}
+                networking:
+                  enabled: false
       telemetry:
         enabled: false
