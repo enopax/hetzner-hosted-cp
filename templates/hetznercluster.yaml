@@ -14,9 +14,6 @@ spec:
     port: 6443
   controlPlaneRegions:
     - {{ .Values.region }}
-  hcloudTokenRef:
-    name: {{ .Values.hetznerSecretName }}
-    key: hcloud
   hetznerSecretRef:
     name: {{ .Values.hetznerSecretName }}
     key:
