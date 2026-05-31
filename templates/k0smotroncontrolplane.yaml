@@ -44,7 +44,7 @@ spec:
           charts:
             - name: cilium
               chartname: cilium/cilium
-              version: "1.17.1"
+              version: "1.19.4"
               namespace: kube-system
               values: |
                 k8sServiceHost: {{ .Values.ingress.apiHost }}
@@ -64,6 +64,7 @@ spec:
                     clusterPoolIPv4MaskSize: 24
             - name: hcloud-cloud-controller-manager
               chartname: hcloud/hcloud-cloud-controller-manager
+              version: "1.31.1"
               namespace: kube-system
               values: |
                 env:
@@ -83,6 +84,16 @@ spec:
                     effect: NoSchedule
                   - key: node.kubernetes.io/unreachable
                     effect: NoSchedule
+            - name: hcloud-csi
+              chartname: hcloud/hcloud-csi
+              version: "2.21.1"
+              namespace: kube-system
+              values: |
+                storageClasses:
+                  - name: hcloud-volumes
+                    defaultStorageClass: true
+                node:
+                  kubeletDir: /var/lib/k0s/kubelet
       telemetry:
         enabled: false
   {{- end }}
