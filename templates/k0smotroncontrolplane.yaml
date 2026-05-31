@@ -5,6 +5,8 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   version: {{ .Values.k0s.version }}
+  etcd:
+    autoDeletePVCs: {{ .Values.etcd.autoDeletePVCs }}
   persistence:
     type: emptyDir
   service:

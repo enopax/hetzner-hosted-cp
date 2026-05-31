@@ -9,6 +9,9 @@ clusterNetwork:
   services:
     cidrBlock: "10.96.0.0/12"
 
+etcd:
+  autoDeletePVCs: true
+
 k0s:
   version: "v1.34.4+k0s.0"
 

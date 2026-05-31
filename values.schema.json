@@ -32,6 +32,14 @@
         }
       }
     },
+    "etcd": {
+      "type": "object",
+      "properties": {
+        "autoDeletePVCs": {
+          "type": "boolean"
+        }
+      }
+    },
     "k0s": {
       "type": "object",
       "properties": {
