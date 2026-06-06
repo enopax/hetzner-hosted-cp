@@ -202,6 +202,60 @@ workerConfig:
 
 This allows customization of the k0s worker configuration and lifecycle hooks.
 
+#### Autoscaling with Split Worker Pools
+
+When autoscaling is enabled, the chart creates two separate node pools:
+
+- **Core pool** — A static pool (not autoscaled) that runs system and infrastructure pods (coredns, metrics-server, hcloud-ccm, hcloud-csi-controller, cilium-operator, sveltos-agent)
+- **Worker pool** — An autoscaled pool with a `NoSchedule` taint, exclusively for user workloads
+
+This separation ensures that autoscaled worker nodes only run user workloads and can be cleanly removed during scale-down without system pods blocking eviction.
+
+```yaml
+# Core pool (static, runs system pods)
+core:
+  serverType: "cpx22"
+  imageName: "ubuntu-24.04"
+  replicas: 1
+
+# Worker pool (autoscaled, runs user workloads)
+worker:
+  serverType: "cpx22"
+  imageName: "ubuntu-24.04"
+  replicas: 1                    # Initial replica count
+
+autoscaling:
+  enabled: true
+  minSize: 1                     # Minimum worker nodes
+  maxSize: 5                     # Maximum worker nodes
+  capacityHints:                 # Optional, helps autoscaler estimate capacity
+    cpu: "4"
+    memory: "8Gi"
+```
+
+**Resources created when autoscaling is enabled:**
+
+| Resource | Core Pool | Worker Pool |
+|----------|-----------|-------------|
+| HCloudMachineTemplate | `{cluster}-core-mt` | `{cluster}-mt` |
+| K0sWorkerConfigTemplate | `{cluster}-core-machine-config` | `{cluster}-machine-config` |
+| MachineDeployment | `{cluster}-core-md` (static) | `{cluster}-md` (autoscaler annotations) |
+
+**Taint strategy:**
+
+Worker pool nodes are tainted with `node-role.kubernetes.io/worker=:NoSchedule`. User workloads must include a toleration:
+
+```yaml
+tolerations:
+  - key: node-role.kubernetes.io/worker
+    operator: Exists
+    effect: NoSchedule
+```
+
+DaemonSets (cilium, kube-proxy, konnectivity, hcloud-csi-node) tolerate all taints and still run on worker nodes. System Deployments without this toleration naturally stay on core nodes.
+
+When autoscaling is disabled (default), the chart creates a single MachineDeployment identical to previous versions — fully backwards compatible.
+
 #### Private Networking
 
 ```yaml
@@ -307,7 +361,42 @@ spec:
         - --kubelet-extra-args="--cloud-provider=external"
 ```
 
-### Example 3: Development Cluster
+### Example 3: Autoscaled Cluster with Split Worker Pools
+
+```yaml
+apiVersion: k0rdent.mirantis.com/v1beta1
+kind: ClusterDeployment
+metadata:
+  name: autoscaled-cluster
+  namespace: kcm-system
+spec:
+  template: hetzner-hosted-cp-1-5-0
+  credential: hcloud-cluster-provisioning
+  config:
+    clusterName: autoscaled-cluster
+    region: nbg1
+    sshKeyName: my-key
+    core:
+      serverType: cpx22
+      imageName: ubuntu-24.04
+      replicas: 1
+    worker:
+      serverType: cpx22
+      imageName: ubuntu-24.04
+      replicas: 1
+    autoscaling:
+      enabled: true
+      minSize: 1
+      maxSize: 5
+    ingress:
+      enabled: true
+      apiHost: api.autoscaled.k8s.example.com
+      konnectivityHost: k.autoscaled.k8s.example.com
+    k0s:
+      version: v1.35.4+k0s.0
+```
+
+### Example 4: Development Cluster
 
 ```yaml
 apiVersion: kcm.enopax.io/v1alpha1
