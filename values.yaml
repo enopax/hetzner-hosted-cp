@@ -15,10 +15,23 @@ etcd:
 k0s:
   version: "v1.34.4+k0s.0"
 
+core:
+  serverType: "cpx22"
+  imageName: "ubuntu-24.04"
+  replicas: 1
+
 worker:
   serverType: "cpx22"
   imageName: "ubuntu-24.04"
   replicas: 2
+
+autoscaling:
+  enabled: false
+  minSize: 1
+  maxSize: 5
+  capacityHints: {}
+    # cpu: "4"
+    # memory: "8Gi"
 
 ingress:
   enabled: false

@@ -1,3 +1,20 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: K0sWorkerConfigTemplate
+metadata:
+  name: {{ .Values.clusterName }}-core-machine-config
+  namespace: {{ .Release.Namespace }}
+spec:
+  template:
+    spec:
+      version: {{ .Values.k0s.version }}
+      args:
+        - --labels=node.kubernetes.io/role=core
+      {{- if .Values.ingress.enabled }}
+        - --kubelet-extra-args="--cloud-provider=external"
+      {{- end }}
+---
+{{- end }}
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: K0sWorkerConfigTemplate
 metadata:
@@ -9,6 +26,8 @@ spec:
       version: {{ .Values.k0s.version }}
       args:
         - --labels=node.kubernetes.io/role=worker
-      {{- if .Values.ingress.enabled }}
+      {{- if .Values.autoscaling.enabled }}
+        - --kubelet-extra-args="--cloud-provider=external --register-with-taints=node-role.kubernetes.io/worker=:NoSchedule"
+      {{- else if .Values.ingress.enabled }}
         - --kubelet-extra-args="--cloud-provider=external"
       {{- end }}

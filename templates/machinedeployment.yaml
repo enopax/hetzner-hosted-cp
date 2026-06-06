@@ -1,20 +1,65 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: {{ .Values.clusterName }}-core-md
+  namespace: {{ .Release.Namespace }}
+spec:
+  clusterName: {{ .Values.clusterName }}
+  replicas: {{ .Values.core.replicas }}
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: {{ .Values.clusterName }}
+      pool: core-pool
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: {{ .Values.clusterName }}
+        pool: core-pool
+    spec:
+      clusterName: {{ .Values.clusterName }}
+      failureDomain: {{ .Values.region }}
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: K0sWorkerConfigTemplate
+          name: {{ .Values.clusterName }}-core-machine-config
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: HCloudMachineTemplate
+        name: {{ .Values.clusterName }}-core-mt
+---
+{{- end }}
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
 metadata:
   name: {{ .Values.clusterName }}-md
   namespace: {{ .Release.Namespace }}
+  {{- if .Values.autoscaling.enabled }}
+  annotations:
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size: {{ .Values.autoscaling.minSize | quote }}
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size: {{ .Values.autoscaling.maxSize | quote }}
+    {{- with .Values.autoscaling.capacityHints }}
+    {{- if .cpu }}
+    capacity.cluster-autoscaler.kubernetes.io/cpu: {{ .cpu | quote }}
+    {{- end }}
+    {{- if .memory }}
+    capacity.cluster-autoscaler.kubernetes.io/memory: {{ .memory | quote }}
+    {{- end }}
+    {{- end }}
+  {{- end }}
 spec:
   clusterName: {{ .Values.clusterName }}
   replicas: {{ .Values.worker.replicas }}
   selector:
     matchLabels:
       cluster.x-k8s.io/cluster-name: {{ .Values.clusterName }}
-      pool: worker-pool-1
+      pool: worker-pool
   template:
     metadata:
       labels:
         cluster.x-k8s.io/cluster-name: {{ .Values.clusterName }}
-        pool: worker-pool-1
+        pool: worker-pool
     spec:
       clusterName: {{ .Values.clusterName }}
       failureDomain: {{ .Values.region }}

@@ -35,6 +35,10 @@ hcloudNetwork:
   subnetCidrBlock: "10.0.0.0/24"
   networkZone: "eu-central"
 
+core:
+  image: ubuntu-24.04
+  type: cpx22
+
 worker:
   image: ubuntu-24.04
   type: cpx22
@@ -64,6 +68,14 @@ workerConfig:
   files:
     - path: /etc/test.conf
       content: "test"
+
+autoscaling:
+  enabled: true
+  minSize: 1
+  maxSize: 10
+  capacityHints:
+    cpu: "4"
+    memory: "8Gi"
 
 cloudControllerManager:
   enabled: true
