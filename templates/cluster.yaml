@@ -1,7 +1,7 @@
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
-  name: {{ .Values.clusterName }}
+  name: {{ .Values.clusterName | quote }}
   namespace: {{ .Release.Namespace }}
 spec:
   clusterNetwork:
@@ -18,4 +18,4 @@ spec:
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: HetznerCluster
-    name: {{ .Values.clusterName }}
+    name: {{ .Values.clusterName | quote }}

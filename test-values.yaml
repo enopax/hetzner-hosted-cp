@@ -1,87 +1,56 @@
-# Test values for worker template verification
-workersNumber: 3
-
-controlPlane:
-  replicas: 1
-  ingress:
-    enabled: false
+# Werte, mit denen dieses Chart wirklich rendert.
+#
+# Nachgebaut aus dem laufenden `dev-dose` (ClusterDeployment `spec.config`,
+# Vorlage hetzner-hosted-cp-1-5-1) - nicht aus den Chart-Vorgaben erfunden.
+#
+# Hier stand eine Fassung im Vokabular des **standalone**-Charts:
+# `workersNumber`, `sshKeyNames` als Liste, `tokenRef`, `worker.type`,
+# `clusterNetwork.pods.cidrBlocks` als Liste. Keiner dieser Schluessel wird von
+# diesem Chart gelesen; `clusterName` und `sshKeyName` fehlten, und damit liess
+# sich das Chart mit dieser Datei nicht einmal rendern. Siehe enopax/enopax#38.
+clusterName: "eu1f-test01"
+region: "fsn1"
+sshKeyName: "anmn"
+hetznerSecretName: "hetzner"
 
 clusterNetwork:
   pods:
-    cidrBlocks:
-      - "10.244.0.0/16"
+    cidrBlock: "10.244.0.0/16"
   services:
-    cidrBlocks:
-      - "10.96.0.0/12"
+    cidrBlock: "10.96.0.0/12"
 
-clusterLabels:
-  environment: test
-clusterAnnotations:
-  description: "Test cluster"
-
-region: "fsn1"
-sshKeyNames:
-  - "test-key"
-tokenRef:
-  name: "hcloud-token-secret"
-  key: "hcloud-token"
-placementGroupName: "test-pg"
-labels:
-  team: "platform"
-
-hcloudNetwork:
-  enabled: true
-  cidrBlock: "10.0.0.0/16"
-  subnetCidrBlock: "10.0.0.0/24"
-  networkZone: "eu-central"
-
-core:
-  image: ubuntu-24.04
-  type: cpx22
-
-worker:
-  image: ubuntu-24.04
-  type: cpx22
-  placementGroupName: "worker-pg"
-  dataDisks:
-    - name: data
-      size: 100
-  additionalSecurityGroups:
-    - name: sg-1
+etcd:
+  autoDeletePVCs: true
 
 k0s:
-  version: v1.34.2+k0s.0
-  arch: amd64
-  api:
-    extraArgs:
-      enable-admission-plugins: "NodeRestriction"
-  network: {}
+  version: "v1.35.4+k0s.0"
 
-workerConfig:
-  args:
-    - --enable-cloud-provider
-    - --kubelet-extra-args="--cloud-provider=external"
-  preInstallCommands:
-    - "echo 'Pre-install'"
-  postStartCommands:
-    - "echo 'Post-start'"
-  files:
-    - path: /etc/test.conf
-      content: "test"
+# Der statische Pool. Er entsteht nur mit `autoscaling.enabled` - ohne sie
+# rendert von `core` nichts, auch nicht `replicas`.
+core:
+  serverType: "cpx32"
+  imageName: "ubuntu-24.04"
+  replicas: 1
+
+# Der skalierbare Pool. `replicas` ist die Zahl, die ein Skalieren aendert.
+worker:
+  serverType: "cpx32"
+  imageName: "ubuntu-24.04"
+  replicas: 2
 
 autoscaling:
-  enabled: true
+  enabled: false
   minSize: 1
-  maxSize: 10
-  capacityHints:
-    cpu: "4"
-    memory: "8Gi"
+  maxSize: 5
+  capacityHints: {}
 
-cloudControllerManager:
+# Ohne Ingress initialisiert die Steuerungsebene nie: sie laeuft als Pods auf
+# dem regionalen Cluster und wird von aussen ueber dessen Ingress bedient.
+ingress:
   enabled: true
-  version: "1.28.0"
-  args:
-    cluster-cidr: "10.244.0.0/16"
-    allocate-node-cidrs: "true"
-    allow-untagged-cloud: ""
-    cloud-provider: "hcloud"
+  apiHost: "api.eu1f-test01.eu1-fsn1.k8s.enopax.io"
+  konnectivityHost: "k.eu1f-test01.eu1-fsn1.k8s.enopax.io"
+  className: "haproxy"
+  port: 443
+  annotations:
+    haproxy.org/ssl-passthrough: "true"

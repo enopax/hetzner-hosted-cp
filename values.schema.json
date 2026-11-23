@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
+  "description": "Werte des hosted-Charts. Bewusst **ohne** additionalProperties: false - KCM schickt beim Anlegen Werte mit, die dieses Chart nicht liest (clusterIdentity, clusterLabels, clusterAnnotations), und eine neue KCM-Fassung kann weitere mitschicken. Ein fremder Schluessel wird deshalb angenommen und ignoriert; was dieses Chart liest, steht vollstaendig hier.",
   "required": ["clusterName", "region", "sshKeyName", "worker"],
   "properties": {
     "clusterName": {
@@ -12,8 +13,28 @@
       "minLength": 1
     },
     "sshKeyName": {
+      "description": "Einer, nicht mehrere. Der standalone-Chart nimmt eine Liste `sshKeyNames` - wer die hier setzt, setzt nichts.",
       "type": "string",
       "minLength": 1
+    },
+    "hetznerSecretName": {
+      "description": "Das Secret, auf das HetznerCluster.spec.hetznerSecretRef zeigt, auf dem regionalen Cluster. Nicht `tokenRef`: dessen Schluessel legt dieser Chart selbst auf `hcloud` fest.",
+      "type": "string",
+      "minLength": 1
+    },
+    "clusterNetwork": {
+      "description": "`cidrBlock` im Singular je Netz. Der standalone-Chart nimmt `cidrBlocks` als Liste - wer die hier setzt, setzt nichts.",
+      "type": "object",
+      "properties": {
+        "pods": {
+          "type": "object",
+          "properties": { "cidrBlock": { "type": "string", "minLength": 1 } }
+        },
+        "services": {
+          "type": "object",
+          "properties": { "cidrBlock": { "type": "string", "minLength": 1 } }
+        }
+      }
     },
     "core": {
       "type": "object",
@@ -79,6 +100,18 @@
           }
         }
       }
+    },
+    "clusterIdentity": {
+      "description": "Von KCM mitgeschickt (der Verweis auf das Credential-Secret). Dieses Chart liest es nicht - der hosted-Dialekt nimmt `hetznerSecretName`.",
+      "type": "object"
+    },
+    "clusterLabels": {
+      "description": "Von KCM mitgeschickt, darunter die KOF-Labels. Dieses Chart liest sie nicht; sie stehen am ClusterDeployment.",
+      "type": "object"
+    },
+    "clusterAnnotations": {
+      "description": "Von KCM mitgeschickt. Dieses Chart liest sie nicht.",
+      "type": "object"
     },
     "ingress": {
       "type": "object",

@@ -1,6 +1,18 @@
 # Hetzner Hosted Control Plane Chart Tests
 
-This directory contains property-based tests for the hetzner-hosted-cp Helm chart.
+Property-based tests for the hetzner-hosted-cp Helm chart. **Sie laufen in der
+CI** (`.github/workflows/ci.yaml`, Schritt „Property tests") - vorher lagen sie
+hier und wurden nie aufgerufen; sie scheiterten dabei, weil sie das Chart mit
+den Werten des **standalone**-Charts rendern wollten. Siehe enopax/enopax#38.
+
+Alles rendert ueber `tests/property/render.py` mit `test-values.yaml` als
+Grundlage - derselben Datei, mit der auch `helm lint` laeuft. Eine Fassung, mit
+der das Chart nicht rendert, faellt damit beim ersten Test auf.
+
+| Datei | Was sie festhaelt |
+|---|---|
+| `test_helper_functions.py` | Die Objektnamen kommen aus `clusterName`, nicht aus `Release.Name` |
+| `test_rendered_values.py` | Was aus den Werten wird: `worker.replicas` → MachineDeployment, `worker.serverType` → MachineTemplate, der core-Pool nur mit Autoskalierung, `workersNumber` wirkt nicht, und das Schema weist eine falsche k0s-Schreibweise ab |
 
 ## Prerequisites
 

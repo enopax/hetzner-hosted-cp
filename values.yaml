@@ -1,6 +1,13 @@
-clusterName: ""
+# `clusterName` und `sshKeyName` haben hier **keinen** Vorgabewert, und das ist
+# Absicht: beide sind Pflicht (values.schema.json), und ein leerer String
+# erfuellt `minLength: 1` nicht. Sie standen hier als `""` - damit scheiterte
+# `helm lint .` an den eigenen Vorgabewerten des Charts, bei jedem CI-Lauf seit
+# der Schema-Einfuehrung, und die Render-Schritte danach liefen nie.
+#
+# clusterName: <Name des Kindclusters>
+# sshKeyName:  <ein Schluesselname im Hetzner-Projekt, genau einer>
+
 region: "fsn1"
-sshKeyName: ""
 hetznerSecretName: "hetzner"
 
 clusterNetwork:
