@@ -135,13 +135,25 @@ spec:
   template: hetzner-hosted-cp
   credential: hetzner-credential
   config:
+    clusterName: my-hosted-cluster
     region: fsn1
-    workersNumber: 3
-    sshKeyNames:
-      - my-ssh-key
-    tokenRef:
-      name: hcloud-token
-      key: token
+    sshKeyName: my-ssh-key
+    hetznerSecretName: hetzner
+    worker:
+      serverType: cpx32
+      imageName: ubuntu-24.04
+      replicas: 3
+    clusterNetwork:
+      pods:
+        cidrBlock: "10.244.0.0/16"
+      services:
+        cidrBlock: "10.96.0.0/12"
+    k0s:
+      version: v1.35.4+k0s.0
+    ingress:
+      enabled: true
+      apiHost: api.my-hosted-cluster.example.com
+      konnectivityHost: k.my-hosted-cluster.example.com
 EOF
 ```
 
@@ -150,20 +162,48 @@ EOF
 ### Basic Configuration
 
 ```yaml
-# Required settings
-region: "fsn1"                    # Hetzner region
-workersNumber: 2                  # Number of worker nodes
-tokenRef:
-  name: "hcloud-token"           # Secret containing Hetzner API token
-  key: "token"
-sshKeyNames:
-  - "my-ssh-key"                 # SSH keys for node access
+# Required
+clusterName: "my-cluster"        # Name of the child cluster; every object is named after it
+region: "fsn1"                   # Hetzner location
+sshKeyName: "my-ssh-key"         # Exactly one key name, singular
 
-# Worker machine configuration
+# Worker machines
 worker:
-  type: "cpx22"                  # Machine type
-  image: "ubuntu-24.04"          # OS image
+  serverType: "cpx32"            # Machine type
+  imageName: "ubuntu-24.04"      # OS image
+  replicas: 2                    # Number of worker nodes — this is what scaling changes
 ```
+
+> **Dies ist nicht das Vokabular von `hetzner-standalone-cp`.** Hier stand es
+> einmal — `workersNumber`, `sshKeyNames` als Liste, `tokenRef`, `worker.type`,
+> `worker.image` — und genau daraus ist ein Fehler entstanden: ein Dienst
+> schrieb beim Skalieren `workersNumber`, die Kubernetes-API nahm den
+> Schlüssel an, kein Template las ihn, und es entstand keine Maschine
+> (enopax/enopax#38). Was dieses Chart liest, steht vollständig in der Tabelle
+> unten.
+
+### Alle Werte, die dieses Chart liest
+
+Erzeugt aus `grep -rho '\.Values\.[A-Za-z0-9_.]*' templates | sort -u`. Was
+hier nicht steht, wird nicht gelesen — auch wenn das Schema es annimmt.
+
+| Wert | Wirkung |
+|---|---|
+| `clusterName` | Name aller Objekte (`-cp`, `-mt`, `-md`, `-machine-config`) |
+| `region` | Hetzner-Standort der Maschinen |
+| `sshKeyName` | Schlüsselname, **einer** |
+| `hetznerSecretName` | Secret, auf das `HetznerCluster.spec.hetznerSecretRef` zeigt |
+| `clusterNetwork.pods.cidrBlock`, `clusterNetwork.services.cidrBlock` | Netze, **Singular** |
+| `etcd.autoDeletePVCs` | etcd-PVCs der Steuerungsebene |
+| `k0s.version` | k0s-Schreibweise, Muster `v<x>.<y>.<z>+k0s.<n>` |
+| `core.serverType`, `core.imageName`, `core.replicas` | der statische Pool — **nur mit Autoskalierung** |
+| `worker.serverType`, `worker.imageName`, `worker.replicas` | der skalierbare Pool |
+| `autoscaling.enabled`, `.minSize`, `.maxSize`, `.capacityHints` | Autoskalierung und der core-Pool |
+| `ingress.enabled`, `.apiHost`, `.konnectivityHost`, `.className`, `.port`, `.annotations` | Zugang zur Steuerungsebene |
+
+KCM schickt beim Anlegen zusätzlich `clusterIdentity`, `clusterLabels` und
+`clusterAnnotations` mit. Dieses Chart liest sie nicht; sie stehen im Schema,
+damit niemand sie für eine Einstellung dieses Charts hält.
 
 ### Advanced Configuration
 
@@ -172,12 +212,25 @@ worker:
 Enable hostname-based access to your cluster using ingress:
 
 ```yaml
-controlPlane:
-  ingress:
-    enabled: true
-    apiHost: "api.my-cluster.example.com"              # Kubernetes API hostname
-    konnectivityHost: "konnectivity.my-cluster.example.com"  # Konnectivity hostname
+ingress:
+  enabled: true
+  apiHost: "api.my-cluster.example.com"    # Kubernetes API hostname
+  konnectivityHost: "k.my-cluster.example.com"
+  className: "haproxy"
+  port: 443
+  annotations:
+    haproxy.org/ssl-passthrough: "true"
 ```
+
+Der Schlüssel heißt `ingress`, nicht `controlPlane.ingress` — ein
+`controlPlane` kennt dieses Chart nicht.
+
+**Und er schaltet mehr als den Ingress:** das `{{- if and .Values.ingress.enabled … }}`
+in `templates/k0smotroncontrolplane.yaml` umschließt auch `k0sConfig` bis zum
+Dateiende, also Netz, CNI, CCM und CSI. Mit `ingress.enabled: false` — der
+Vorgabe des Charts — entsteht eine Steuerungsebene ohne Netzkonfiguration. Das
+ist vermutlich unbeabsichtigt und in `tests/property/test_rendered_values.py`
+festgehalten, nicht gebilligt.
 
 When ingress is enabled:
 - Clients can access the Kubernetes API using the custom hostname instead of IP addresses
@@ -188,6 +241,11 @@ When ingress is enabled:
 #### HAProxy Sidecar Configuration
 
 Enable additional worker configuration:
+
+> **Dieses Chart liest das nicht.** Kein Template verweist auf `workerConfig` -
+> nachzusehen mit `grep -rho '\.Values\.[A-Za-z0-9_.]*' templates | sort -u`.
+> Der Abschnitt beschreibt etwas, das es hier nicht gibt; ob es kommen soll
+> oder gehen, ist offen. Bis dahin: kopieren bringt nichts.
 
 ```yaml
 workerConfig:
@@ -258,6 +316,11 @@ When autoscaling is disabled (default), the chart creates a single MachineDeploy
 
 #### Private Networking
 
+> **Dieses Chart liest das nicht.** Kein Template verweist auf `hcloudNetwork` -
+> nachzusehen mit `grep -rho '\.Values\.[A-Za-z0-9_.]*' templates | sort -u`.
+> Der Abschnitt beschreibt etwas, das es hier nicht gibt; ob es kommen soll
+> oder gehen, ist offen. Bis dahin: kopieren bringt nichts.
+
 ```yaml
 hcloudNetwork:
   enabled: true
@@ -268,6 +331,11 @@ hcloudNetwork:
 
 #### Control Plane Scaling
 
+> **Dieses Chart liest das nicht.** Kein Template verweist auf `controlPlane` -
+> nachzusehen mit `grep -rho '\.Values\.[A-Za-z0-9_.]*' templates | sort -u`.
+> Der Abschnitt beschreibt etwas, das es hier nicht gibt; ob es kommen soll
+> oder gehen, ist offen. Bis dahin: kopieren bringt nichts.
+
 ```yaml
 controlPlane:
   replicas: 3  # Scale control plane pods for high availability
@@ -275,91 +343,106 @@ controlPlane:
 
 #### Custom k0s Configuration
 
+Gelesen wird genau **eine** Angabe, und sie ist Pflichtform:
+
 ```yaml
 k0s:
-  version: "v1.34.2+k0s.0"
-  api:
-    extraArgs:
-      audit-log-maxage: "30"
-  network:
-    podCIDR: "10.244.0.0/16"
-    serviceCIDR: "10.96.0.0/12"
-
-workerConfig:
-  preInstallCommands:
-    - "apt-get update"
-  postStartCommands:
-    - "systemctl enable k0s"
-  files:
-    - path: "/etc/custom-config.yaml"
-      content: |
-        custom: configuration
+  version: "v1.35.4+k0s.0"   # Muster v<x>.<y>.<z>+k0s.<n>, vom Schema erzwungen
 ```
 
+Die Schreibweise ist keine Formalie: die Vorlage baut aus der Version eine
+Download-URL. `1.30.4` ergibt eine, die es nicht gibt - und das fällt erst
+auf, wenn die Maschine schon läuft und bezahlt wird. `values.schema.json`
+weist es deshalb vorher ab.
+
+Das Netz des Kindclusters kommt aus `clusterNetwork` (Singular `cidrBlock`),
+nicht aus `k0s.network`.
+
+> **Dieses Chart liest `k0s.api`, `k0s.network` und `workerConfig` nicht.**
+> Hier stand ein Beispiel mit allen dreien. Die k0s-Konfiguration der
+> Steuerungsebene steht fest in `templates/k0smotroncontrolplane.yaml`; wer
+> daran etwas einstellen will, braucht erst einen Wert im Chart.
+
 ## Usage Examples
+
+> Die Beispiele 1, 2 und 4 standen hier im Vokabular des
+> **standalone**-Charts und mit einer `apiVersion`, die es nicht gibt
+> (`kcm.enopax.io/v1alpha1`). Sie sind durch Fassungen ersetzt, die diesem
+> Chart entsprechen; Beispiel 3 war schon richtig. Vorlage und Felder sind an
+> einem Cluster nachgesehen, der läuft, nicht aus den Chart-Vorgaben
+> hergeleitet.
 
 ### Example 1: Basic Hosted Cluster
 
 ```yaml
-apiVersion: kcm.enopax.io/v1alpha1
+apiVersion: k0rdent.mirantis.com/v1beta1
 kind: ClusterDeployment
 metadata:
   name: basic-hosted-cluster
   namespace: kcm-system
 spec:
-  template: hetzner-hosted-cp
-  credential: hetzner-credential
+  template: hetzner-hosted-cp-1-5-1
+  credential: hcloud-cluster-provisioning
   config:
+    clusterName: basic-hosted-cluster
     region: fsn1
-    workersNumber: 2
-    tokenRef:
-      name: hcloud-token
-      key: token
-    sshKeyNames:
-      - production-key
+    sshKeyName: production-key
+    hetznerSecretName: hetzner
     worker:
-      type: cpx22
-      image: ubuntu-24.04
+      serverType: cpx32
+      imageName: ubuntu-24.04
+      replicas: 2
+    k0s:
+      version: v1.35.4+k0s.0
+    ingress:
+      enabled: true
+      apiHost: api.basic-hosted-cluster.example.com
+      konnectivityHost: k.basic-hosted-cluster.example.com
 ```
 
 ### Example 2: Production Cluster with Ingress
 
 ```yaml
-apiVersion: kcm.enopax.io/v1alpha1
+apiVersion: k0rdent.mirantis.com/v1beta1
 kind: ClusterDeployment
 metadata:
   name: production-hosted-cluster
   namespace: kcm-system
 spec:
-  template: hetzner-hosted-cp
-  credential: hetzner-credential
+  template: hetzner-hosted-cp-1-5-1
+  credential: hcloud-cluster-provisioning
   config:
+    clusterName: production-hosted-cluster
     region: fsn1
-    workersNumber: 5
-    controlPlane:
-      replicas: 3
-      ingress:
-        enabled: true
-        apiHost: api.prod-cluster.company.com
-        konnectivityHost: konnectivity.prod-cluster.company.com
-    tokenRef:
-      name: hcloud-token
-      key: token
-    sshKeyNames:
-      - production-key
+    sshKeyName: production-key
+    hetznerSecretName: hetzner
     worker:
-      type: cpx31
-      image: ubuntu-24.04
-      placementGroupName: prod-workers
-    hcloudNetwork:
+      serverType: cpx42
+      imageName: ubuntu-24.04
+      replicas: 5
+    clusterNetwork:
+      pods:
+        cidrBlock: "10.244.0.0/16"
+      services:
+        cidrBlock: "10.96.0.0/12"
+    etcd:
+      autoDeletePVCs: true
+    k0s:
+      version: v1.35.4+k0s.0
+    ingress:
       enabled: true
-      cidrBlock: "10.100.0.0/16"
-      subnetCidrBlock: "10.100.1.0/24"
-    workerConfig:
-      args:
-        - --enable-cloud-provider
-        - --kubelet-extra-args="--cloud-provider=external"
+      apiHost: api.prod-cluster.company.com
+      konnectivityHost: k.prod-cluster.company.com
+      className: haproxy
+      port: 443
+      annotations:
+        haproxy.org/ssl-passthrough: "true"
 ```
+
+Die Steuerungsebene ist hier **nicht** hochverfügbar konfiguriert, und das
+lässt sich mit diesem Chart auch nicht: `controlPlane.replicas` stand im
+vorigen Beispiel, existiert aber nicht — siehe unten, § Control Plane
+Scaling.
 
 ### Example 3: Autoscaled Cluster with Split Worker Pools
 
@@ -399,29 +482,29 @@ spec:
 ### Example 4: Development Cluster
 
 ```yaml
-apiVersion: kcm.enopax.io/v1alpha1
+apiVersion: k0rdent.mirantis.com/v1beta1
 kind: ClusterDeployment
 metadata:
   name: dev-hosted-cluster
   namespace: kcm-system
 spec:
-  template: hetzner-hosted-cp
-  credential: hetzner-credential
+  template: hetzner-hosted-cp-1-5-1
+  credential: hcloud-cluster-provisioning
   config:
+    clusterName: dev-hosted-cluster
     region: nbg1
-    workersNumber: 1
-    controlPlane:
-      replicas: 1
-    tokenRef:
-      name: hcloud-token
-      key: token
-    sshKeyNames:
-      - dev-key
+    sshKeyName: dev-key
+    hetznerSecretName: hetzner
     worker:
-      type: cx21
-      image: ubuntu-24.04
-    hcloudNetwork:
-      enabled: false  # Disable private networking for simplicity
+      serverType: cpx22
+      imageName: ubuntu-24.04
+      replicas: 1
+    k0s:
+      version: v1.35.4+k0s.0
+    ingress:
+      enabled: true
+      apiHost: api.dev-hosted-cluster.example.com
+      konnectivityHost: k.dev-hosted-cluster.example.com
 ```
 
 ## Monitoring and Troubleshooting

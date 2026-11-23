@@ -1,3 +1,15 @@
+# Was hier geprueft wird, und warum es anders aussieht als vorher.
+#
+# Vorher: `helm lint .` ohne Werte, dann drei Render-Schritte mit `--set` im
+# Vokabular des **standalone**-Charts (`workersNumber`, `tokenRef.name`,
+# `worker.type`, `controlPlane.*`). Dieses Chart kennt keinen dieser
+# Schluessel, und `clusterName`/`sshKeyName` fehlten - beide Pflicht. Jeder
+# Lauf seit Einfuehrung des Schemas ist am ersten Schritt gescheitert, und die
+# Render-Schritte liefen nie. Siehe enopax/enopax#38.
+#
+# Jetzt: alles geht durch `test-values.yaml` - dieselbe Datei, mit der auch die
+# Tests rendern, nachgebaut aus einem Cluster, der wirklich laeuft. Und
+# gerendert wird nicht nur, sondern geprueft, *was* dabei herauskommt.
 name: CI
 
 on:
@@ -16,37 +28,31 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
+      # Mit Werten, nicht ohne: `clusterName` und `sshKeyName` haben keinen
+      # Vorgabewert, weil ein leerer String das Schema nicht erfuellt.
       - name: Lint chart
-        run: helm lint .
+        run: helm lint . -f test-values.yaml
 
-      - name: Template render test (LoadBalancer mode - default)
-        run: |
-          helm template test . \
-            --set workersNumber=1 \
-            --set region=nbg1 \
-            --set tokenRef.name=hcloud-token \
-            --set k0s.version=v1.34.3+k0s.0 \
-            --set worker.type=cpx22
+      - name: Template render test (PaaS-Cluster, wie er wirklich gebaut wird)
+        run: helm template test . -f test-values.yaml
 
-      - name: Template render test (NodePort mode)
-        run: |
-          helm template test . \
-            --set workersNumber=1 \
-            --set region=nbg1 \
-            --set tokenRef.name=hcloud-token \
-            --set k0s.version=v1.34.3+k0s.0 \
-            --set worker.type=cpx22 \
-            --set controlPlane.service.type=NodePort \
-            --set controlPlane.endpoint.host=10.0.0.1
+      # Die Vorgabe des Charts. Rendert, und zwar mit einer Steuerungsebene
+      # ohne k0sConfig - das haelt tests/property/test_rendered_values.py fest.
+      - name: Template render test (ohne Ingress)
+        run: helm template test . -f test-values.yaml --set ingress.enabled=false
 
-      - name: Template render test (Ingress mode)
-        run: |
-          helm template test . \
-            --set workersNumber=1 \
-            --set region=nbg1 \
-            --set tokenRef.name=hcloud-token \
-            --set k0s.version=v1.34.3+k0s.0 \
-            --set worker.type=cpx22 \
-            --set controlPlane.service.type=ClusterIP \
-            --set controlPlane.ingress.apiHost=api.test.example.com \
-            --set controlPlane.ingress.konnectivityHost=konnectivity.test.example.com
+      - name: Template render test (mit Autoskalierung)
+        run: helm template test . -f test-values.yaml --set autoscaling.enabled=true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: pip install -r tests/requirements.txt
+
+      # Die eigentliche Pruefung: nicht *dass* gerendert wird, sondern **was**.
+      # Diese Tests lagen schon im Repo und wurden nie aufgerufen.
+      - name: Property tests
+        run: pytest tests/property -q

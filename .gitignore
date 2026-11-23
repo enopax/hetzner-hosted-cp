@@ -1,1 +1,5 @@
 *.tgz
+# Fundstuecke der Property-Tests (hypothesis) und Python-Artefakte
+.hypothesis/
+__pycache__/
+.pytest_cache/

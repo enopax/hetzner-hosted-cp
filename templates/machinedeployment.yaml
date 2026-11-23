@@ -5,19 +5,19 @@ metadata:
   name: {{ .Values.clusterName }}-core-md
   namespace: {{ .Release.Namespace }}
 spec:
-  clusterName: {{ .Values.clusterName }}
+  clusterName: {{ .Values.clusterName | quote }}
   replicas: {{ .Values.core.replicas }}
   selector:
     matchLabels:
-      cluster.x-k8s.io/cluster-name: {{ .Values.clusterName }}
+      cluster.x-k8s.io/cluster-name: {{ .Values.clusterName | quote }}
       pool: core-pool
   template:
     metadata:
       labels:
-        cluster.x-k8s.io/cluster-name: {{ .Values.clusterName }}
+        cluster.x-k8s.io/cluster-name: {{ .Values.clusterName | quote }}
         pool: core-pool
     spec:
-      clusterName: {{ .Values.clusterName }}
+      clusterName: {{ .Values.clusterName | quote }}
       failureDomain: {{ .Values.region }}
       bootstrap:
         configRef:
@@ -49,19 +49,19 @@ metadata:
     {{- end }}
   {{- end }}
 spec:
-  clusterName: {{ .Values.clusterName }}
+  clusterName: {{ .Values.clusterName | quote }}
   replicas: {{ .Values.worker.replicas }}
   selector:
     matchLabels:
-      cluster.x-k8s.io/cluster-name: {{ .Values.clusterName }}
+      cluster.x-k8s.io/cluster-name: {{ .Values.clusterName | quote }}
       pool: worker-pool
   template:
     metadata:
       labels:
-        cluster.x-k8s.io/cluster-name: {{ .Values.clusterName }}
+        cluster.x-k8s.io/cluster-name: {{ .Values.clusterName | quote }}
         pool: worker-pool
     spec:
-      clusterName: {{ .Values.clusterName }}
+      clusterName: {{ .Values.clusterName | quote }}
       failureDomain: {{ .Values.region }}
       bootstrap:
         configRef:
