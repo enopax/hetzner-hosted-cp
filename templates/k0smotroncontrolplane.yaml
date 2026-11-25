@@ -7,6 +7,11 @@ spec:
   version: {{ .Values.k0s.version }}
   etcd:
     autoDeletePVCs: {{ .Values.etcd.autoDeletePVCs }}
+    # Hier in der **v1beta1**-Form, wie dieses Manifest sie spricht. Gelesen
+    # wird das Objekt als v1beta2, und dort liegt dasselbe Feld unter
+    # `spec.storage.etcd.image`; die Konvertierung macht den Weg. Wer am
+    # laufenden Cluster nachsieht, findet es also eine Ebene tiefer.
+    image: {{ .Values.etcd.image | quote }}
   persistence:
     type: emptyDir
   service:

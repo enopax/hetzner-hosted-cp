@@ -2,7 +2,12 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "description": "Werte des hosted-Charts. Bewusst **ohne** additionalProperties: false - KCM schickt beim Anlegen Werte mit, die dieses Chart nicht liest (clusterIdentity, clusterLabels, clusterAnnotations), und eine neue KCM-Fassung kann weitere mitschicken. Ein fremder Schluessel wird deshalb angenommen und ignoriert; was dieses Chart liest, steht vollstaendig hier.",
-  "required": ["clusterName", "region", "sshKeyName", "worker"],
+  "required": [
+    "clusterName",
+    "region",
+    "sshKeyName",
+    "worker"
+  ],
   "properties": {
     "clusterName": {
       "type": "string",
@@ -28,11 +33,21 @@
       "properties": {
         "pods": {
           "type": "object",
-          "properties": { "cidrBlock": { "type": "string", "minLength": 1 } }
+          "properties": {
+            "cidrBlock": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         },
         "services": {
           "type": "object",
-          "properties": { "cidrBlock": { "type": "string", "minLength": 1 } }
+          "properties": {
+            "cidrBlock": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     },
@@ -54,7 +69,9 @@
     },
     "worker": {
       "type": "object",
-      "required": ["serverType"],
+      "required": [
+        "serverType"
+      ],
       "properties": {
         "serverType": {
           "type": "string",
@@ -71,11 +88,20 @@
     },
     "etcd": {
       "type": "object",
+      "description": "Die Ablage der hosted Steuerungsebene.",
       "properties": {
         "autoDeletePVCs": {
           "type": "boolean"
+        },
+        "image": {
+          "type": "string",
+          "description": "Das etcd-Bild, ausdruecklich festgenagelt. Leer wuerde die CRD-Vorgabe einsetzen, und die wandert mit k0smotron - siehe values.yaml.",
+          "minLength": 1
         }
-      }
+      },
+      "required": [
+        "image"
+      ]
     },
     "k0s": {
       "type": "object",
@@ -89,14 +115,26 @@
     "autoscaling": {
       "type": "object",
       "properties": {
-        "enabled": { "type": "boolean" },
-        "minSize": { "type": "integer", "minimum": 0 },
-        "maxSize": { "type": "integer", "minimum": 1 },
+        "enabled": {
+          "type": "boolean"
+        },
+        "minSize": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxSize": {
+          "type": "integer",
+          "minimum": 1
+        },
         "capacityHints": {
           "type": "object",
           "properties": {
-            "cpu": { "type": "string" },
-            "memory": { "type": "string" }
+            "cpu": {
+              "type": "string"
+            },
+            "memory": {
+              "type": "string"
+            }
           }
         }
       }
@@ -116,21 +154,44 @@
     "ingress": {
       "type": "object",
       "properties": {
-        "enabled": { "type": "boolean" },
-        "apiHost": { "type": "string" },
-        "konnectivityHost": { "type": "string" },
-        "className": { "type": "string" },
-        "port": { "type": "integer" },
-        "annotations": { "type": "object" }
+        "enabled": {
+          "type": "boolean"
+        },
+        "apiHost": {
+          "type": "string"
+        },
+        "konnectivityHost": {
+          "type": "string"
+        },
+        "className": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "annotations": {
+          "type": "object"
+        }
       },
       "if": {
-        "properties": { "enabled": { "const": true } }
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        }
       },
       "then": {
-        "required": ["apiHost", "konnectivityHost"],
+        "required": [
+          "apiHost",
+          "konnectivityHost"
+        ],
         "properties": {
-          "apiHost": { "minLength": 1 },
-          "konnectivityHost": { "minLength": 1 }
+          "apiHost": {
+            "minLength": 1
+          },
+          "konnectivityHost": {
+            "minLength": 1
+          }
         }
       }
     }

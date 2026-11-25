@@ -128,3 +128,47 @@ def test_a_cluster_name_is_required():
 def test_any_worker_count_lands_unchanged(replicas):
     docs = render(sets={'worker.replicas': replicas})
     assert worker_md(docs)['spec']['replicas'] == replicas
+
+
+def control_plane(docs):
+    """Die hosted Steuerungsebene."""
+    return one_of_kind(docs, 'K0smotronControlPlane')
+
+
+def test_etcd_image_reaches_the_control_plane():
+    """
+    Das etcd-Bild steht am Objekt, nicht in der Vorgabe der CRD.
+
+    Das ist der Kern von k0rdent/kcm#3047: die CRD hat einen Vorgabewert, und
+    der wandert mit k0smotron - unter 2.0.4 `v3.5.13`, ab k0rdent 1.12
+    `v3.7.1`. Weil die Vorgabe beim Schreiben eingesetzt wird, bekaeme ein
+    bestehender Cluster beim naechsten Schreiben 3.7.1, und etcd kann nicht
+    zwei Minor-Fassungen auf einmal. Steht die Fassung im gerenderten Objekt,
+    kann keine neue Vorgabe sie verschieben.
+
+    Gerendert wird die **v1beta1**-Form (`spec.etcd.image`); gelesen wird das
+    Objekt als v1beta2, wo dasselbe Feld unter `spec.storage.etcd.image`
+    liegt. Den Weg macht die Konvertierung - am laufenden `dev-box1`
+    nachgesehen.
+    """
+    docs = render(strings={'etcd.image': 'ghcr.io/enopax/etcd:v3.5.36'})
+    assert control_plane(docs)['spec']['etcd']['image'] == 'ghcr.io/enopax/etcd:v3.5.36'
+
+
+def test_etcd_image_is_never_left_empty():
+    """
+    Eine leere Angabe ist schlimmer als keine: sie rendert ein Feld, das die
+    API verwirft, und dann greift wieder die Vorgabe - genau die, vor der das
+    Festnageln schuetzen soll.
+    """
+    with pytest.raises(HelmError):
+        render(strings={'etcd.image': ''})
+
+
+def test_etcd_pvcs_are_kept_by_default():
+    """
+    `autoDeletePVCs` wirkt wirklich, trotz des Formwechsels zwischen v1beta1
+    und v1beta2. Dass unser Wert ankommt, ist am laufenden Cluster
+    nachgesehen: `spec.storage.etcd.autoDeletePVCs: true`.
+    """
+    assert control_plane(render())['spec']['etcd']['autoDeletePVCs'] is True

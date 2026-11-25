@@ -195,11 +195,50 @@ hier nicht steht, wird nicht gelesen — auch wenn das Schema es annimmt.
 | `hetznerSecretName` | Secret, auf das `HetznerCluster.spec.hetznerSecretRef` zeigt |
 | `clusterNetwork.pods.cidrBlock`, `clusterNetwork.services.cidrBlock` | Netze, **Singular** |
 | `etcd.autoDeletePVCs` | etcd-PVCs der Steuerungsebene |
+| `etcd.image` | das etcd-Bild, **festgenagelt** — s. unten |
 | `k0s.version` | k0s-Schreibweise, Muster `v<x>.<y>.<z>+k0s.<n>` |
 | `core.serverType`, `core.imageName`, `core.replicas` | der statische Pool — **nur mit Autoskalierung** |
 | `worker.serverType`, `worker.imageName`, `worker.replicas` | der skalierbare Pool |
 | `autoscaling.enabled`, `.minSize`, `.maxSize`, `.capacityHints` | Autoskalierung und der core-Pool |
 | `ingress.enabled`, `.apiHost`, `.konnectivityHost`, `.className`, `.port`, `.annotations` | Zugang zur Steuerungsebene |
+
+### Warum `etcd.image` festgenagelt ist
+
+Die CRD hat für dieses Feld einen Vorgabewert, und der **wandert mit
+k0smotron**: unter 2.0.4 ist er `quay.io/k0sproject/etcd:v3.5.13`, ab
+k0rdent 1.12 `v3.7.1`. Eingesetzt wird die Vorgabe beim Schreiben in das
+Objekt — ein bestehender Cluster bekäme beim nächsten Schreiben also 3.7.1,
+und etcd kann **nicht zwei Minor-Fassungen auf einmal** (3.5 → 3.6 → 3.7).
+
+Genau so ist [k0rdent/kcm#3047](https://github.com/k0rdent/kcm/issues/3047)
+entstanden: etcd crash-loopt, weil es seine vorhandenen Daten nicht liest, und
+die API des Kindclusters ist weg. Das Ticket ist als *not planned*
+geschlossen, mit der Begründung, dass die Beispielvorlagen kein etcd-Bild
+einstellen lassen. Dieses Chart lässt es einstellen.
+
+Steht die Fassung im gerenderten Objekt, kann keine neue Vorgabe sie
+verschieben. Der Schritt von einer zur nächsten ist dann eine Entscheidung mit
+Datum, und er geht einzeln:
+
+```
+quay.io/k0sproject/etcd:v3.5.13    heute
+ghcr.io/enopax/etcd:v3.5.36        Zwischenstufe — etcd verlangt >= 3.5.32,
+                                   bevor 3.6 die Daten anfasst
+quay.io/k0sproject/etcd:v3.6.14
+quay.io/k0sproject/etcd:v3.7.1     Vorgabe ab k0rdent 1.12
+```
+
+Die Zwischenstufe gibt es nur von uns, und `images/etcd/Dockerfile` sagt auch,
+warum: `quay.io/k0sproject/etcd` führt genau drei Tags, und die offiziellen
+etcd-Bilder (`quay.io/coreos/etcd`, `registry.k8s.io/etcd`) haben **keine
+Shell** — während k0smotron den etcd-Container fest auf `/bin/bash` und ein
+Einstiegsskript verdrahtet. Unser Bild ist deshalb dasselbe wie bisher, nur
+mit neueren Binärdateien.
+
+Gerendert wird die **v1beta1**-Form (`spec.etcd.image`). Gelesen wird das
+Objekt als v1beta2, und dort liegt dasselbe Feld unter
+`spec.storage.etcd.image`; den Weg macht die Konvertierung. Wer am laufenden
+Cluster nachsieht, findet es also eine Ebene tiefer.
 
 KCM schickt beim Anlegen zusätzlich `clusterIdentity`, `clusterLabels` und
 `clusterAnnotations` mit. Dieses Chart liest sie nicht; sie stehen im Schema,
