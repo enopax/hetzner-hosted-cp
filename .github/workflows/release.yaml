@@ -31,8 +31,15 @@ jobs:
             exit 1
           fi
 
+      # Mit `-f test-values.yaml`, wie in der CI. Ohne die Werte scheitert der
+      # Lint am eigenen Schema: `clusterName` und `sshKeyName` sind Pflicht,
+      # und `values.yaml` traegt sie nicht - sie kommen je Cluster von
+      # console-api. Der Release-Workflow lief deshalb bei jedem Tag in einen
+      # Fehler, der nichts mit dem Chart zu tun hatte. Gefunden beim Tag
+      # v1.6.0 (enopax/enopax#50); dieselbe Falle wie in der CI dieses Charts,
+      # die bis Mai bei jedem Lauf rot war.
       - name: Lint chart
-        run: helm lint .
+        run: helm lint . -f test-values.yaml
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
