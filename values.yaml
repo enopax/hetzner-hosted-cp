@@ -18,6 +18,29 @@ clusterNetwork:
 
 etcd:
   autoDeletePVCs: true
+  # Das etcd-Bild der hosted Steuerungsebene - **ausdruecklich festgenagelt**,
+  # und das ist kein Stil, sondern eine Absicherung.
+  #
+  # Die CRD hat einen Vorgabewert, und der wandert mit k0smotron: unter 2.0.4
+  # ist er `v3.5.13`, ab k0rdent 1.12 `v3.7.1`. Weil die Vorgabe beim
+  # Schreiben in das Objekt eingesetzt wird, bekaeme ein bestehender Cluster
+  # beim naechsten Schreiben plotzlich 3.7.1 - und etcd kann nicht zwei
+  # Minor-Fassungen auf einmal (3.5 → 3.6 → 3.7). Genau so ist
+  # k0rdent/kcm#3047 entstanden: etcd crash-loopt, weil es seine Daten nicht
+  # mehr liest, und die API des Kindclusters ist weg.
+  #
+  # Steht die Fassung hier, kann keine neue Vorgabe sie verschieben. Der
+  # Schritt von einer Fassung zur naechsten ist dann eine Entscheidung mit
+  # Datum - und er geht **einzeln**:
+  #
+  #   quay.io/k0sproject/etcd:v3.5.13   heute
+  #   ghcr.io/enopax/etcd:v3.5.36       Zwischenstufe; etcd verlangt >= 3.5.32,
+  #                                     bevor 3.6 die Daten anfasst, und ein
+  #                                     Bild mit bash gibt es dafuer nur von uns
+  #                                     (images/etcd/Dockerfile)
+  #   quay.io/k0sproject/etcd:v3.6.14
+  #   quay.io/k0sproject/etcd:v3.7.1    Vorgabe ab k0rdent 1.12
+  image: "quay.io/k0sproject/etcd:v3.5.13"
 
 k0s:
   version: "v1.34.4+k0s.0"
