@@ -209,3 +209,62 @@ def test_a_new_cluster_is_born_on_the_current_etcd():
     assert control_plane(render())['spec']['etcd']['image'] == (
         'quay.io/k0sproject/etcd:v3.7.1'
     )
+
+def worker_md(docs):
+    """Das MachineDeployment des Arbeiterpools."""
+    return next(
+        d for d in of_kind(docs, 'MachineDeployment')
+        if d['spec']['template']['metadata']['labels'].get('pool') == 'worker-pool'
+    )
+
+
+def test_the_machinedeployment_carries_the_version_the_node_reports():
+    """
+    k0rdent vergleicht `Machine.spec.version` mit
+    `Node.status.nodeInfo.kubeletVersion` - als **Zeichenkette**, nicht als
+    Semver. Der Knoten meldet `v1.36.3+k0s`, die k0s-Release-Nummer ist
+    `v1.36.3+k0s.0`, und mit der zweiten gilt die Maschine dauerhaft als
+    veraltet. Am laufenden Cluster gemessen (enopax/enopax#49):
+
+        spec.version: v1.36.3+k0s.0  →  UpToDate=False, "v1.36.3+k0s.0 required"
+        spec.version: v1.36.3+k0s    →  UpToDate=True
+
+    Vorher stand am MachineDeployment **keine** Fassung, und dann ist die
+    verlangte leer - jede Maschine gilt als veraltet, und jede Funktion, die
+    auf "up-to-date" beruht, ist blind. Das ist der Hebel fuer die
+    In-Place-Updates aus k0rdent 1.13.
+    """
+    docs = render(strings={'k0s.version': 'v1.36.3+k0s.0'})
+    for md in of_kind(docs, 'MachineDeployment'):
+        assert md['spec']['template']['spec']['version'] == 'v1.36.3+k0s'
+
+
+def test_the_worker_config_keeps_the_k0s_release_number():
+    """
+    Die Release-Nummer bleibt im `K0sWorkerConfigTemplate`, und das ist keine
+    Redundanz: k0smotron nimmt die Fassung von dort, wenn sie dort steht, und
+    nur sonst die vom Machine-Objekt - die es dann mit
+    `fmt.Sprintf("%s+%s", version, "k0s.0")` normalisiert. Aus `v1.36.3+k0s`
+    wuerde dabei `v1.36.3+k0s+k0s.0`, also Unsinn, und der naechste Knoten
+    kaeme nicht hoch.
+    """
+    docs = render(strings={'k0s.version': 'v1.36.3+k0s.0'})
+    for cfg in of_kind(docs, 'K0sWorkerConfigTemplate'):
+        assert cfg['spec']['template']['spec']['version'] == 'v1.36.3+k0s.0'
+
+
+@given(
+    minor=st.integers(min_value=20, max_value=99),
+    patch=st.integers(min_value=0, max_value=20),
+    counter=st.integers(min_value=0, max_value=9),
+)
+@settings(max_examples=12, deadline=None)
+def test_the_counter_is_cut_and_nothing_else(minor, patch, counter):
+    """
+    Geschnitten wird genau der Zaehler hinter `+k0s`, egal welche Fassung.
+    """
+    k0s = f'v1.{minor}.{patch}+k0s.{counter}'
+    docs = render(strings={'k0s.version': k0s})
+    md = worker_md(docs)['spec']['template']['spec']['version']
+    assert md == f'v1.{minor}.{patch}+k0s'
+    assert md != k0s
