@@ -40,7 +40,16 @@ etcd:
   #                                     (images/etcd/Dockerfile)
   #   quay.io/k0sproject/etcd:v3.6.14
   #   quay.io/k0sproject/etcd:v3.7.1    Vorgabe ab k0rdent 1.12
-  image: "quay.io/k0sproject/etcd:v3.5.13"
+  #
+  # Diesen Weg muss ein **bestehender** Cluster gehen. Ein **neuer** faengt
+  # oben an: sein Datenverzeichnis ist leer, es gibt nichts zu lesen, und der
+  # Management-Cluster faehrt seit 2026-11-26 k0rdent 1.13 mit k0smotron
+  # 2.3.1, dessen eigene Vorgabe 3.7.1 ist. Stand die Vorgabe hier weiter auf
+  # 3.5.13, wuerde jeder neu angelegte PaaS-Cluster auf der alten Fassung
+  # geboren - und muesste denselben Wanderweg spaeter nachholen, mitsamt
+  # Wartungsfenster. console-api setzt `etcd.image` nicht; fuer neue Cluster
+  # gilt also genau diese Zeile.
+  image: "quay.io/k0sproject/etcd:v3.7.1"
 
 k0s:
   version: "v1.34.4+k0s.0"

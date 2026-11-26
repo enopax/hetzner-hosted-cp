@@ -24,7 +24,7 @@ etcd:
   # Die Fassung, die `dev-box1` heute faehrt. Sie steht hier und nicht als
   # Vorgabe im Test, damit die Datei weiter das Abbild eines laufenden
   # Clusters ist.
-  image: "quay.io/k0sproject/etcd:v3.5.13"
+  image: "quay.io/k0sproject/etcd:v3.7.1"
 
 k0s:
   version: "v1.35.4+k0s.0"
