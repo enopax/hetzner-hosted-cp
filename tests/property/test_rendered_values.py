@@ -172,3 +172,40 @@ def test_etcd_pvcs_are_kept_by_default():
     nachgesehen: `spec.storage.etcd.autoDeletePVCs: true`.
     """
     assert control_plane(render())['spec']['etcd']['autoDeletePVCs'] is True
+
+def test_the_controller_collector_is_switched_off_for_hosted_clusters():
+    """
+    Eine hosted Steuerungsebene hat keinen Knoten mit
+    `node-role.kubernetes.io/control-plane`, KOFs `controller-k0s`-Kollektor
+    ist aber ein DaemonSet mit genau dieser Affinitaet. Seit k0rdent 1.12
+    prueft ein `ServiceSet` die Arbeitslasten, und die mitgelieferte
+    DaemonSet-Regel verlangt `status.updatedNumberScheduled` - das Kubernetes
+    bei null eingeplanten Knoten weglaesst. Ohne diese Annotation bleibt
+    `kof-collectors` auf `Provisioning` und der Cluster dauerhaft bei 3/4
+    Diensten.
+
+    Am laufenden `dev-box1` nachgesehen: mit der Annotation verschwindet das
+    DaemonSet und der Cluster steht auf 4/4 (enopax/enopax#50).
+    """
+    import yaml as _yaml
+
+    cluster = one_of_kind(render(), 'Cluster')
+    values = _yaml.safe_load(
+        cluster['metadata']['annotations']['k0rdent.mirantis.com/kof-collectors-values']
+    )
+    collector = values['opentelemetry-kube-stack']['collectors']['controller-k0s']
+    assert collector['enabled'] is False
+
+def test_a_new_cluster_is_born_on_the_current_etcd():
+    """
+    Die Vorgabe des Charts ist die Fassung, mit der ein **neuer** Cluster
+    anfaengt - console-api setzt `etcd.image` nicht.
+
+    Ein neuer Cluster hat ein leeres Datenverzeichnis, also gibt es nichts zu
+    lesen und keinen Grund, unten anzufangen. Stuende hier weiter 3.5.13,
+    muesste jeder neu angelegte PaaS-Cluster den Weg 3.5.36 → 3.6.14 → 3.7.1
+    spaeter nachholen, mitsamt Wartungsfenster (enopax/enopax#50).
+    """
+    assert control_plane(render())['spec']['etcd']['image'] == (
+        'quay.io/k0sproject/etcd:v3.7.1'
+    )
