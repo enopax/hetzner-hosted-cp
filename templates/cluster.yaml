@@ -3,6 +3,30 @@ kind: Cluster
 metadata:
   name: {{ .Values.clusterName | quote }}
   namespace: {{ .Release.Namespace }}
+  annotations:
+    # Eine hosted Steuerungsebene hat keine Knoten mit dem Label
+    # `node-role.kubernetes.io/control-plane` - sie laeuft als Pods auf dem
+    # Regional. KOFs `controller-k0s`-Kollektor ist aber ein DaemonSet mit
+    # genau dieser Knoten-Affinitaet und bleibt hier deshalb bei **null**
+    # gewuenschten Knoten.
+    #
+    # Seit k0rdent 1.12 prueft ein `ServiceSet` die Arbeitslasten, bevor ein
+    # Dienst als ausgebracht gilt, und die mitgelieferte DaemonSet-Regel
+    # verlangt `status.updatedNumberScheduled` - ein Feld, das Kubernetes bei
+    # null eingeplanten Knoten weglaesst. Das DaemonSet gilt damit als
+    # ungesund, `kof-collectors` bleibt auf `Provisioning`, und der Cluster
+    # steht dauerhaft bei 3/4 Diensten: er wird nie `Ready`, nie ACTIVE, und
+    # laeuft nach 45 Minuten in die Zeitgrenze von console-api.
+    #
+    # Am 2026-11-26 an `dev-box1` gemessen (enopax/enopax#50): mit dieser
+    # Zeile verschwindet das DaemonSet in 16 Sekunden und der Cluster steht
+    # auf 4/4. Ueberlagerte Regeln helfen nicht - sie koennen nur strenger
+    # sein als die globale, nachgewiesen mit einer eigenen ConfigMap.
+    k0rdent.mirantis.com/kof-collectors-values: |
+      opentelemetry-kube-stack:
+        collectors:
+          controller-k0s:
+            enabled: false
 spec:
   clusterNetwork:
     pods:

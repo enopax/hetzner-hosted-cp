@@ -172,3 +172,26 @@ def test_etcd_pvcs_are_kept_by_default():
     nachgesehen: `spec.storage.etcd.autoDeletePVCs: true`.
     """
     assert control_plane(render())['spec']['etcd']['autoDeletePVCs'] is True
+
+def test_the_controller_collector_is_switched_off_for_hosted_clusters():
+    """
+    Eine hosted Steuerungsebene hat keinen Knoten mit
+    `node-role.kubernetes.io/control-plane`, KOFs `controller-k0s`-Kollektor
+    ist aber ein DaemonSet mit genau dieser Affinitaet. Seit k0rdent 1.12
+    prueft ein `ServiceSet` die Arbeitslasten, und die mitgelieferte
+    DaemonSet-Regel verlangt `status.updatedNumberScheduled` - das Kubernetes
+    bei null eingeplanten Knoten weglaesst. Ohne diese Annotation bleibt
+    `kof-collectors` auf `Provisioning` und der Cluster dauerhaft bei 3/4
+    Diensten.
+
+    Am laufenden `dev-box1` nachgesehen: mit der Annotation verschwindet das
+    DaemonSet und der Cluster steht auf 4/4 (enopax/enopax#50).
+    """
+    import yaml as _yaml
+
+    cluster = one_of_kind(render(), 'Cluster')
+    values = _yaml.safe_load(
+        cluster['metadata']['annotations']['k0rdent.mirantis.com/kof-collectors-values']
+    )
+    collector = values['opentelemetry-kube-stack']['collectors']['controller-k0s']
+    assert collector['enabled'] is False
