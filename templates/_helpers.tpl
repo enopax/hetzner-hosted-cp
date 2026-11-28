@@ -19,11 +19,32 @@ gemessen (enopax/enopax#49):
 
 Deshalb rendert das MachineDeployment die gemeldete Form und das
 `K0sWorkerConfigTemplate` weiter die Release-Nummer. Das ist **nicht**
-Redundanz: k0smotron nimmt die Fassung aus dem WorkerConfig, wenn sie dort
-steht, und nur sonst die vom Machine-Objekt - und dann normalisiert es sie mit
-`fmt.Sprintf("%s+%s", version, "k0s.0")`. Aus `v1.36.3+k0s` wuerde dabei
-`v1.36.3+k0s+k0s.0`, also Unsinn. Solange das so ist, muss die Release-Nummer
-ausdruecklich im WorkerConfig stehen bleiben.
+Redundanz: fuer den Aufbau nimmt k0smotron die Fassung aus dem WorkerConfig,
+wenn sie dort steht, und nur sonst die vom Machine-Objekt - und dann
+normalisiert es sie: aus `v1.36.3+k0s` wuerde `v1.36.3+k0s+k0s.0`, also
+Unsinn. Solange das so ist, muss die Release-Nummer ausdruecklich im
+WorkerConfig stehen bleiben.
+
+**Fuer In-Place-Upgrades reicht das nicht, und es ist nicht zu reparieren.**
+Am 2026-11-28 am laufenden `dev-box1` gemessen (enopax/enopax#65):
+`extensions/inplaceversionupdate/autopilot.go` nimmt die Fassung
+**unbedingt** vom Machine-Objekt und aus der Bootstrap-Config nur die
+Download-URL:
+
+  downloadURL, _ := getDownloadURLFromBootstrapConfig(..., desiredMachine.Spec.Bootstrap.ConfigRef, ...)
+  version := util.NormalizeK0sVersion(desiredMachine.Spec.Version)
+
+`NormalizeK0sVersion` prueft auf `+k0s.` **mit Punkt**; unsere kubelet-Form
+hat keinen, also wird `+k0s.0` angehaengt. Der Autopilot-Plan trug dann
+
+  version: v1.37.2+k0s+k0s.0
+  url:     https://get.k0sproject.io/v1.37.2+k0s+k0s.0/k0s-...-amd64   → 404
+
+und blieb auf `ApplyFailed`. Die beiden Anforderungen widersprechen sich:
+k0rdent will hier die kubelet-Form, die In-Place-Extension will die
+Release-Nummer. **Eine Chart kann nicht beides.** Wer hier also die
+Release-Nummer wieder einsetzt, um In-Place zu heilen, bricht `UpToDate` an
+jedem Cluster - der Weg ist gemessen und zu.
 
 Das Schema laesst fuer `k0s.version` nur `vX.Y.Z+k0s.N` zu, deshalb genuegt
 hier ein Schnitt am Zaehler.
